@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chutneys Ops - cash-up</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F6B47}a:hover{color:#174F35}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #FBF8F2; color: #1F2A24; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; padding: 20px 20px 22px; gap: 14px">
+  <a href="StaffHome.dc.html" style="display: flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; font-weight: 500; text-decoration: none; color: #1F6B47">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+    Truck 2 today
+  </a>
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 26px">Cash-up</h1>
+    <span style="font-size: 13px; line-height: 1.5; color: #5B6560">Sales come straight from the till. You only count the cash.</span>
+  </div>
+  <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 6px 16px">
+    <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #EEE9DF; font-size: 14px"><span style="color: #3D4842">Total sales today</span><span style="font-weight: 600">$980.00</span></div>
+    <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #EEE9DF; font-size: 14px"><span style="color: #3D4842">Paid by EFTPOS</span><span style="font-weight: 600">$668.60</span></div>
+    <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #EEE9DF; font-size: 14px"><span style="color: #3D4842">Paid in cash</span><span style="font-weight: 600">$311.40</span></div>
+    <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #EEE9DF; font-size: 14px"><span style="color: #3D4842">Float at start</span><span style="font-weight: 600">$200.00</span></div>
+    <div style="display: flex; justify-content: space-between; padding: 12px 0; font-size: 15px"><span style="font-weight: 600">Cash that should be in the drawer</span><span style="font-weight: 700">$511.40</span></div>
+  </div>
+  <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+      <label for="cash-counted" style="font-weight: 600; font-size: 15px">Cash you counted</label>
+      <div style="display: flex; align-items: center; gap: 4px">
+        <span style="font-size: 17px; font-weight: 600; color: #5B6560">$</span>
+        <input id="cash-counted" type="number" step="0.10" inputmode="decimal" value="{{counted}}" onChange="{{onCounted}}" style="width: 112px; min-height: 44px; box-sizing: border-box; padding: 8px 10px; border: 1px solid #CFC7B6; border-radius: 10px; font-family: Inter, sans-serif; font-size: 18px; font-weight: 600; text-align: right; color: #1F2A24; background: #FBF8F2">
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: {{varBg}}">
+      <span style="font-size: 14px; font-weight: 600; color: {{varFg}}">{{varLabel}}</span>
+      <span style="font-size: 18px; font-weight: 700; color: {{varFg}}">{{variance}}</span>
+    </div>
+    <span style="font-size: 12px; line-height: 1.45; color: #5B6560">Differences over $5.00 are flagged to the manager. Try typing 480 to see one.</span>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px">
+    <sc-if value="{{sent}}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="background: #E7F1EB; border: 1px solid #A9CFB8; border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.45; color: #174F35">{{sentNote}}</div>
+    </sc-if>
+    <button type="button" onClick="{{send}}" style="min-height: 50px; border: none; border-radius: 12px; background: #1F6B47; color: #FFFFFF; font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; cursor: pointer">Send cash-up</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+const EXPECTED = 511.40;
+function money(n) {
+  const sign = n < 0 ? '-' : (n > 0 ? '+' : '');
+  return sign + '$' + Math.abs(n).toFixed(2);
+}
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { counted: '508.90', sentNote: '' };
+  }
+  renderVals() {
+    const n = parseFloat(this.state.counted);
+    const valid = !isNaN(n);
+    const diff = valid ? Math.round((n - EXPECTED) * 100) / 100 : 0;
+    const big = Math.abs(diff) > 5;
+    let label = 'Balanced';
+    if (diff < 0) label = big ? 'Short, manager alerted' : 'Short, within $5';
+    if (diff > 0) label = big ? 'Over, manager alerted' : 'Over, within $5';
+    return {
+      counted: this.state.counted,
+      variance: valid ? money(diff) : '-',
+      varLabel: valid ? label : 'Enter the cash you counted',
+      varBg: big ? '#FFF1DE' : '#E7F1EB',
+      varFg: big ? '#8A4B08' : '#174F35',
+      sent: this.state.sentNote !== '',
+      sentNote: this.state.sentNote,
+      onCounted: (e) => this.setState({ counted: e.target.value, sentNote: '' }),
+      send: () => {
+        if (!valid) return;
+        const note = big
+          ? 'Cash-up sent. Difference of ' + money(diff) + ' flagged to the manager.'
+          : 'Cash-up sent. Difference of ' + money(diff) + ' logged.';
+        this.setState({ sentNote: note });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

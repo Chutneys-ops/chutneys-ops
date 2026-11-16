@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chutneys Ops - food safety temperatures</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F6B47}a:hover{color:#174F35}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #FBF8F2; color: #1F2A24; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; padding: 20px 20px 22px; gap: 14px">
+  <a href="StaffHome.dc.html" style="display: flex; align-items: center; gap: 4px; min-height: 44px; font-size: 14px; font-weight: 500; text-decoration: none; color: #1F6B47">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+    Truck 2 today
+  </a>
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 26px">Temperature check</h1>
+    <span style="font-size: 13px; line-height: 1.5; color: #5B6560">2:00 pm check. Fridges 5&#176;C or below, hot food 60&#176;C or above. Try typing 7 for Fridge 2 to see what happens.</span>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{units}}" as="u" hint-placeholder-count="3">
+      <div style="background: #FFFFFF; border: 1px solid {{u.border}}; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+          <label for="{{u.inputId}}" style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-weight: 600; font-size: 15px">{{u.name}}</span>
+            <span style="font-size: 12px; color: #5B6560">{{u.rule}}</span>
+          </label>
+          <div style="display: flex; align-items: center; gap: 6px">
+            <input id="{{u.inputId}}" type="number" step="0.1" inputmode="decimal" value="{{u.value}}" onChange="{{u.onChange}}" style="width: 76px; min-height: 44px; box-sizing: border-box; padding: 8px 10px; border: 1px solid #CFC7B6; border-radius: 10px; font-family: Inter, sans-serif; font-size: 17px; font-weight: 600; text-align: right; color: #1F2A24; background: #FBF8F2">
+            <span style="font-size: 14px; color: #5B6560">&#176;C</span>
+          </div>
+        </div>
+        <sc-if value="{{u.ok}}" hint-placeholder-val="{{ true }}">
+          <span style="font-size: 13px; font-weight: 500; color: #1F6B47">In range</span>
+        </sc-if>
+        <sc-if value="{{u.bad}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span style="font-size: 13px; font-weight: 600; color: #8A4B08">Out of range. What did you do about it?</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px">
+              <sc-for list="{{u.actions}}" as="a" hint-placeholder-count="3">
+                <button type="button" onClick="{{a.pick}}" aria-pressed="{{a.pressed}}" style="min-height: 40px; padding: 6px 10px; border-radius: 999px; border: 1px solid {{a.border}}; background: {{a.bg}}; color: {{a.fg}}; font-family: Inter, sans-serif; font-size: 12px; font-weight: 500; cursor: pointer">{{a.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px">
+    <sc-if value="{{saved}}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="background: {{noteBg}}; border: 1px solid {{noteBorder}}; border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.45; color: {{noteFg}}">{{savedNote}}</div>
+    </sc-if>
+    <button type="button" onClick="{{save}}" style="min-height: 50px; border: none; border-radius: 12px; background: #1F6B47; color: #FFFFFF; font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; cursor: pointer">Save readings</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+const UNITS = [
+  { id: 'f1', name: 'Fridge 1', rule: 'Prep fridge, 5°C or below', max: 5, start: '3.4' },
+  { id: 'f2', name: 'Fridge 2', rule: 'Chutneys and batter, 5°C or below', max: 5, start: '4.1' },
+  { id: 'bm', name: 'Bain-marie', rule: 'Hot hold, 60°C or above', min: 60, start: '66' }
+];
+const ACTIONS = ['Moved food to another fridge', 'Adjusted, recheck in 30 min', 'Food thrown out'];
+function nowLabel() {
+  const d = new Date();
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return h + ':' + m + ' ' + ap;
+}
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const vals = {};
+    UNITS.forEach((u) => { vals[u.id] = u.start; });
+    this.state = { vals: vals, fix: {}, savedAt: '', savedBad: 0, savedMissing: 0 };
+  }
+  isBad(u, v) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return false;
+    if (u.max !== undefined) return n > u.max;
+    return n < u.min;
+  }
+  renderVals() {
+    const s = this.state;
+    const units = UNITS.map((u) => {
+      const bad = this.isBad(u, s.vals[u.id]);
+      return {
+        inputId: 'temp-' + u.id,
+        name: u.name,
+        rule: u.rule,
+        value: s.vals[u.id],
+        ok: !bad,
+        bad: bad,
+        border: bad ? '#E0A458' : '#E3DDD0',
+        onChange: (e) => {
+          const vals = Object.assign({}, this.state.vals);
+          vals[u.id] = e.target.value;
+          this.setState({ vals: vals, savedAt: '' });
+        },
+        actions: ACTIONS.map((label) => {
+          const on = s.fix[u.id] === label;
+          return {
+            label: label,
+            pressed: on ? 'true' : 'false',
+            bg: on ? '#8A4B08' : '#FFF6E8',
+            fg: on ? '#FFFFFF' : '#6B3D06',
+            border: on ? '#8A4B08' : '#EBCB97',
+            pick: () => {
+              const fix = Object.assign({}, this.state.fix);
+              fix[u.id] = label;
+              this.setState({ fix: fix, savedAt: '' });
+            }
+          };
+        })
+      };
+    });
+    const badUnits = UNITS.filter((u) => this.isBad(u, s.vals[u.id]));
+    const missing = badUnits.filter((u) => !s.fix[u.id]).length;
+    let note = '';
+    if (s.savedAt) {
+      if (s.savedMissing > 0) note = 'Please pick what you did for each out-of-range reading before saving.';
+      else if (s.savedBad > 0) note = 'Saved at ' + s.savedAt + '. The manager has been sent the out-of-range reading and your fix.';
+      else note = 'Saved at ' + s.savedAt + '. All readings in range.';
+    }
+    const warn = s.savedAt && (s.savedMissing > 0 || s.savedBad > 0);
+    return {
+      units: units,
+      saved: s.savedAt !== '',
+      savedNote: note,
+      noteBg: warn ? '#FFF6E8' : '#E7F1EB',
+      noteBorder: warn ? '#EBCB97' : '#A9CFB8',
+      noteFg: warn ? '#6B3D06' : '#174F35',
+      save: () => {
+        this.setState({ savedAt: nowLabel(), savedBad: badUnits.length, savedMissing: missing });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

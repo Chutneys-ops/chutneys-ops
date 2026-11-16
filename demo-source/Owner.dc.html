@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chutneys Ops - owner dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F6B47}a:hover{color:#174F35}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; background: #FBF8F2; color: #1F2A24; font-family: Inter, system-ui, sans-serif; padding: 28px 20px 40px">
+  <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div aria-hidden="true" style="width: 40px; height: 40px; border-radius: 10px; background: #1F6B47; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px">C</div>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 26px">All sites today</h1>
+          <span style="font-size: 13px; color: #5B6560">Monday 16 November, updated 9:10 pm. Sample data.</span>
+        </div>
+      </div>
+      <a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid #CFC7B6; border-radius: 10px; font-size: 14px; font-weight: 500; text-decoration: none; color: #1F6B47; background: #FFFFFF">Switch role</a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px">
+      <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #5B6560">Total sales</span>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 32px">$9,770</span>
+        <span style="font-size: 13px; color: #3D4842">Across 6 sites</span>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #5B6560">Opening checklists on time</span>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 32px">5 of 6</span>
+        <span style="font-size: 13px; color: #8A4B08">Truck 4 missed</span>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #5B6560">Cash difference</span>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 32px">-$21.00</span>
+        <span style="font-size: 13px; color: #3D4842">Orewa cafe and Truck 2</span>
+      </div>
+      <div style="background: #FFF6E8; border: 1px solid #EBCB97; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; color: #6B3D06">Needs a look</span>
+        <span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 32px; color: #6B3D06">3 sites</span>
+        <span style="font-size: 13px; color: #6B3D06">See the list below</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start">
+      <div style="flex: 999 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 19px">Sites</h2>
+          <div role="group" aria-label="Filter sites" style="display: flex; gap: 6px">
+            <sc-for list="{{filters}}" as="f" hint-placeholder-count="2">
+              <button type="button" onClick="{{f.pick}}" aria-pressed="{{f.pressed}}" style="min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{f.border}}; background: {{f.bg}}; color: {{f.fg}}; font-family: Inter, sans-serif; font-size: 13px; font-weight: 500; cursor: pointer">{{f.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 620px; border-collapse: collapse; font-size: 14px">
+            <thead>
+              <tr style="text-align: left; color: #5B6560; font-size: 12px">
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #E3DDD0">Site</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #E3DDD0; text-align: right">Sales</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #E3DDD0">Opening checklist</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #E3DDD0">Temp logs</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #E3DDD0">Cash-up</th>
+                <th scope="col" style="padding: 8px 10px; font-weight: 600; border-bottom: 1px solid #E3DDD0">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+                <tr>
+                  <td style="padding: 12px 10px; border-bottom: 1px solid #EEE9DF; font-weight: 600">{{r.site}}</td>
+                  <td style="padding: 12px 10px; border-bottom: 1px solid #EEE9DF; text-align: right; font-variant-numeric: tabular-nums">{{r.sales}}</td>
+                  <td style="padding: 12px 10px; border-bottom: 1px solid #EEE9DF; color: #3D4842">{{r.check}}</td>
+                  <td style="padding: 12px 10px; border-bottom: 1px solid #EEE9DF; color: #3D4842">{{r.temps}}</td>
+                  <td style="padding: 12px 10px; border-bottom: 1px solid #EEE9DF; color: #3D4842">{{r.cash}}</td>
+                  <td style="padding: 12px 10px; border-bottom: 1px solid #EEE9DF">
+                    <span style="display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: {{r.pillBg}}; color: {{r.pillFg}}; white-space: nowrap">{{r.status}}</span>
+                  </td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+        <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 19px">Sales by channel</h2>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>In store and at the truck</span><span style="font-weight: 600">$5,890 (60%)</span></div>
+            <div style="height: 10px; border-radius: 999px; background: #EEE9DF"><div style="height: 10px; width: 60%; border-radius: 999px; background: #1F6B47"></div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Uber Eats</span><span style="font-weight: 600">$1,920 (20%)</span></div>
+            <div style="height: 10px; border-radius: 999px; background: #EEE9DF"><div style="height: 10px; width: 20%; border-radius: 999px; background: #1F6B47"></div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>DoorDash</span><span style="font-weight: 600">$1,140 (12%)</span></div>
+            <div style="height: 10px; border-radius: 999px; background: #EEE9DF"><div style="height: 10px; width: 12%; border-radius: 999px; background: #1F6B47"></div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; font-size: 13px"><span>Website orders</span><span style="font-weight: 600">$820 (8%)</span></div>
+            <div style="height: 10px; border-radius: 999px; background: #EEE9DF"><div style="height: 10px; width: 8%; border-radius: 999px; background: #1F6B47"></div></div>
+          </div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 19px">Needs a look</h2>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid #EEE9DF">
+            <span style="font-size: 14px; font-weight: 600">Truck 3, Fridge 2 at 7.2&#176;C</span>
+            <span style="font-size: 13px; line-height: 1.45; color: #3D4842">2:14 pm. Food moved to Fridge 1. Recheck at 2:45 pm read 4.0&#176;C.</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid #EEE9DF">
+            <span style="font-size: 14px; font-weight: 600">Orewa cafe, cash short $18.50</span>
+            <span style="font-size: 13px; line-height: 1.45; color: #3D4842">Cash-up at 4:12 pm. Staff note: possible wrong change on a $50 note.</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 14px; font-weight: 600">Truck 4, opening checklist missed</span>
+            <span style="font-size: 13px; line-height: 1.45; color: #3D4842">Not done by 11:00 am. Reminder sent to the shift lead at 11:05 am.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1180}}'>
+const SITES = [
+  { site: 'Restaurant', sales: '$3,420', check: 'Done 9:42 am', temps: '6 of 6 logged', cash: 'Balanced', look: false },
+  { site: 'Orewa cafe', sales: '$1,860', check: 'Done 7:55 am', temps: '4 of 4 logged', cash: 'Short $18.50', look: true },
+  { site: 'Truck 1', sales: '$1,240', check: 'Done 10:31 am', temps: '3 of 3 logged', cash: 'Balanced', look: false },
+  { site: 'Truck 2', sales: '$980', check: 'Done 10:22 am', temps: '3 of 3 logged', cash: 'Short $2.50', look: false },
+  { site: 'Truck 3', sales: '$1,510', check: 'Done 10:48 am', temps: '3 of 3, 1 fixed', cash: 'Balanced', look: true },
+  { site: 'Truck 4', sales: '$760', check: 'Missed', temps: '3 of 3 logged', cash: 'Balanced', look: true }
+];
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { filter: 'all' };
+  }
+  renderVals() {
+    const f = this.state.filter;
+    const rows = SITES.filter((s) => f === 'all' || s.look).map((s) => Object.assign({}, s, {
+      status: s.look ? 'Needs a look' : 'All good',
+      pillBg: s.look ? '#FBE6C4' : '#E7F1EB',
+      pillFg: s.look ? '#6B3D06' : '#174F35'
+    }));
+    const opts = [{ id: 'all', label: 'All sites' }, { id: 'look', label: 'Needs a look' }];
+    return {
+      rows: rows,
+      filters: opts.map((o) => {
+        const on = o.id === f;
+        return {
+          label: o.label,
+          pressed: on ? 'true' : 'false',
+          bg: on ? '#1F6B47' : '#FFFFFF',
+          fg: on ? '#FFFFFF' : '#1F2A24',
+          border: on ? '#1F6B47' : '#CFC7B6',
+          pick: () => this.setState({ filter: o.id })
+        };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

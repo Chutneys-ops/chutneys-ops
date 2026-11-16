@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chutneys Ops - owner input</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1F6B47}a:hover{color:#174F35}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; background: #FBF8F2; color: #1F2A24; font-family: Inter, system-ui, sans-serif; padding: 28px 20px 40px">
+  <div style="max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 28px">Help shape the app</h1>
+        <span style="font-size: 14px; line-height: 1.5; color: #3D4842">Pick what matters for each part. Nothing is sent anywhere, this is just for our chat today.</span>
+      </div>
+      <a href="Main.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid #CFC7B6; border-radius: 10px; font-size: 14px; font-weight: 500; text-decoration: none; color: #1F6B47; background: #FFFFFF">Back to start</a>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 6px 18px">
+      <sc-for list="{{modules}}" as="m" hint-placeholder-count="11">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 0; border-bottom: 1px solid #EEE9DF">
+          <div style="display: flex; flex-direction: column; gap: 3px; flex: 1 1 300px; min-width: 0">
+            <span style="font-size: 15px; font-weight: 600">{{m.name}}</span>
+            <span style="font-size: 13px; line-height: 1.45; color: #5B6560">{{m.desc}}</span>
+          </div>
+          <div role="group" aria-label="{{m.name}}" style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{m.choices}}" as="c" hint-placeholder-count="3">
+              <button type="button" onClick="{{c.pick}}" aria-pressed="{{c.pressed}}" style="min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid {{c.border}}; background: {{c.bg}}; color: {{c.fg}}; font-family: Inter, sans-serif; font-size: 13px; font-weight: 500; cursor: pointer">{{c.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="background: #1F6B47; color: #FFFFFF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 19px">What we'd build first</h2>
+      <span style="font-size: 14px; line-height: 1.55; color: #E3F0E8">{{mustText}}</span>
+      <span style="font-size: 13px; color: #CFE6D8">Nice to have later: {{niceCount}}. Not needed: {{notCount}}.</span>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 19px">A few questions for you</h2>
+      <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: #3D4842">
+        <li>Which till do the restaurant, cafe and trucks use? Is it the same everywhere?</li>
+        <li>Which delivery apps are you on, and at which sites?</li>
+        <li>How do staff record checks, temperatures and cash-ups today? Paper, spreadsheet, WhatsApp?</li>
+        <li>What do you use for rosters, payroll and accounts?</li>
+        <li>Do staff use WhatsApp or Slack more?</li>
+        <li>What is the one thing you wish you could see every night without calling anyone?</li>
+        <li>Would one truck be happy to try it first for two weeks?</li>
+      </ol>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #E3DDD0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+      <label for="owner-notes" style="font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 19px">Anything else?</label>
+      <textarea id="owner-notes" rows="4" value="{{notes}}" onChange="{{onNotes}}" placeholder="Ideas, pain points, things that went wrong last week..." style="box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #CFC7B6; border-radius: 10px; font-family: Inter, sans-serif; font-size: 14px; line-height: 1.5; color: #1F2A24; background: #FBF8F2; resize: vertical"></textarea>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1000,"height":1500}}'>
+const MODULES = [
+  { id: 'check', name: 'Open and close checklists', desc: 'Ticked on a phone, saved with time and name.' },
+  { id: 'temps', name: 'Food safety temperature logs', desc: 'Fridge and hot-hold readings, with fixes when out of range.' },
+  { id: 'cash', name: 'Cash-up and cash difference alerts', desc: 'Count the cash, the app works out the difference.' },
+  { id: 'dash', name: 'Owner view across every site', desc: 'Sales, checks and problems on one screen.' },
+  { id: 'summary', name: 'Nightly summary to Slack or WhatsApp', desc: 'One message at close with the numbers and issues.' },
+  { id: 'till', name: 'Sales pulled from the till automatically', desc: 'No typing sales in by hand.' },
+  { id: 'delivery', name: 'Delivery app reports', desc: 'Uber Eats and DoorDash sales and fees per site.' },
+  { id: 'clock', name: 'Staff clock in and out', desc: 'Timesheets ready to export for payroll.' },
+  { id: 'stock', name: 'Stock, prep and waste', desc: 'What goes out to each truck and what gets thrown away.' },
+  { id: 'trucks', name: 'Truck locations and bookings', desc: 'Where each truck is and which events are booked.' },
+  { id: 'ask', name: 'Ask the app questions', desc: 'Type a question about sales and get an answer back.' }
+];
+const CHOICES = [
+  { id: 'must', label: 'Must have', on: { bg: '#1F6B47', fg: '#FFFFFF', border: '#1F6B47' } },
+  { id: 'nice', label: 'Nice to have', on: { bg: '#8A4B08', fg: '#FFFFFF', border: '#8A4B08' } },
+  { id: 'not', label: 'Not needed', on: { bg: '#4A4438', fg: '#FFFFFF', border: '#4A4438' } }
+];
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picks: {}, notes: '' };
+  }
+  renderVals() {
+    const picks = this.state.picks;
+    const modules = MODULES.map((m) => ({
+      name: m.name,
+      desc: m.desc,
+      choices: CHOICES.map((c) => {
+        const on = picks[m.id] === c.id;
+        return {
+          label: c.label,
+          pressed: on ? 'true' : 'false',
+          bg: on ? c.on.bg : '#FFFFFF',
+          fg: on ? c.on.fg : '#1F2A24',
+          border: on ? c.on.border : '#CFC7B6',
+          pick: () => {
+            const next = Object.assign({}, this.state.picks);
+            if (next[m.id] === c.id) { delete next[m.id]; } else { next[m.id] = c.id; }
+            this.setState({ picks: next });
+          }
+        };
+      })
+    }));
+    const must = MODULES.filter((m) => picks[m.id] === 'must').map((m) => m.name);
+    return {
+      modules: modules,
+      mustText: must.length ? must.join(', ') + '.' : 'Pick "Must have" on the parts that matter most and they will show up here.',
+      niceCount: MODULES.filter((m) => picks[m.id] === 'nice').length,
+      notCount: MODULES.filter((m) => picks[m.id] === 'not').length,
+      notes: this.state.notes,
+      onNotes: (e) => this.setState({ notes: e.target.value })
+    };
+  }
+}
+</script>
+</body>
+</html>
