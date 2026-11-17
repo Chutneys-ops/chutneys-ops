@@ -1,13 +1,13 @@
--- Sample data matching the concept demo (Mon 16 Nov 2026). Not real business data.
-
+-- Sample data matching the concept demo (Mon 16 Nov 2026). Not real business data.urant'))
 insert into sites (id, name, kind) values
-  ('00000000-0000-0000-0000-000000000001', 'Restaurant', 'restaurant'),
-  ('00000000-0000-0000-0000-000000000002', 'Orewa cafe', 'cafe'),
-  ('00000000-0000-0000-0000-000000000003', 'Truck 1', 'truck'),
-  ('00000000-0000-0000-0000-000000000004', 'Truck 2', 'truck'),
-  ('00000000-0000-0000-0000-000000000005', 'Truck 3', 'truck'),
-  ('00000000-0000-0000-0000-000000000006', 'Truck 4', 'truck');
-
+  ('00000000-0000-0000-0000-000000000001', 'Chutneys South Indian Delights (Stoddard Road)', 'restaurant'),
+  ('00000000-0000-0000-0000-000000000002', 'Orewa Cafe', 'cafe'),
+  ('00000000-0000-0000-0000-000000000003', 'Truck - Sandringham', 'truck'),
+  ('00000000-0000-0000-0000-000000000004', 'Truck - New Lynn', 'truck'),
+  ('00000000-0000-0000-0000-000000000005', 'Truck - Mission Bay', 'truck'),
+  ('00000000-0000-0000-0000-000000000006', 'Truck - Papatoetoe', 'truck'),
+  ('00000000-0000-0000-0000-000000000007', 'Urban Roast by Chutneys', 'cafe');
+  
 insert into checklist_items (site_kind, checklist, label, sort_order, needs_photo) values
   ('truck', 'opening', 'Gas bottles checked and secured', 1, false),
   ('truck', 'opening', 'Generator fuel and power OK', 2, false),
