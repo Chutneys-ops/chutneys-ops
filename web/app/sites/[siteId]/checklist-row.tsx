@@ -36,22 +36,34 @@ export function ChecklistRow({ siteId, item, tick, locked }: ChecklistRowProps) 
           type="submit"
           disabled={locked}
           aria-pressed={tick != null}
-          className="flex w-full min-h-12 items-center gap-3 rounded-lg border p-3 text-left disabled:cursor-default"
+          className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-line bg-white px-3 py-2.5 text-left text-ink enabled:hover:border-muted enabled:active:bg-primary-light disabled:cursor-default"
         >
-          <span 
+          <span
             aria-hidden="true"
             className={
               tick
-                ? "flex h-6 w-6 shrink-0 items-center justify-center rounded bg-green-700 text-white"
-                : "h-6 w-6 shrink-0 rounded border-2 border-gray-400"
+                ? "flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg bg-primary"
+                : "h-[26px] w-[26px] shrink-0 rounded-lg border-2 border-muted"
             }
           >
-            {tick ? "✓" : ""}
-          </span>
-          <span className="flex flex-col">
-            <span>{item.label}</span>
             {tick && (
-              <span className="text-sm text-green-700">
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 12l5 5 9-10" />
+              </svg>
+            )}
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[15px] leading-snug font-medium">{item.label}</span>
+            {tick && (
+              <span className="text-[13px] text-primary">
                 {aucklandTime(tick.tickedAt)} by {tick.tickedBy ?? "a team member"}
               </span>
             )}
