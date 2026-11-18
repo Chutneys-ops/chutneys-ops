@@ -1,0 +1,82 @@
+# CI for Chutneys Ops: checks, unit tests, RLS tests and a production build.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# If you push again while a run is still going, cancel the old run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v5
+
+      - name: Set up Node (same major version as local)
+        uses: actions/setup-node@v5
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      # Root install gives us the pinned Supabase CLI (devDependency).
+      - name: Install root dependencies (Supabase CLI)
+        run: npm ci
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      # ---- Fast checks first: fail early before pulling Docker images ----
+
+      - name: TypeScript check
+        working-directory: web
+        run: |
+          npx next typegen
+          npx tsc --noEmit
+
+      - name: ESLint
+        working-directory: web
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: web
+        run: npm test
+
+      # ---- Database: local Supabase stack + RLS tests ----
+
+      # Only Postgres, auth (gotrue), the API gateway (kong) and PostgREST.
+      - name: Start local Supabase
+        run: >
+          npx supabase start
+          -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: RLS tests (pgTAP)
+        run: npx supabase test db
+
+      # Copy the local URL and publishable key into the env of later steps.
+      - name: Export Supabase env for the build
+        run: |
+          eval "$(npx supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLISHABLE_KEY" >> "$GITHUB_ENV"
+
+      # ---- Production build ----
+
+      - name: Production build
+        working-directory: web
+        run: npm run build
