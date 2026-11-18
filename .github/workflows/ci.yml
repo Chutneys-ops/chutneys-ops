@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node (same major version as local)
         uses: actions/setup-node@v5
         with:
-          node-version: "26"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: |
             package-lock.json

@@ -1,0 +1,15 @@
+# Line endings: store text files with LF in the repo and check them out
+# with LF too, on every OS. This overrides each person's core.autocrlf
+# setting, so Windows and Linux (CI) see identical files.
+* text=auto eol=lf
+
+# Binary files: never touch their bytes.
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.pdf   binary

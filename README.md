@@ -2,7 +2,44 @@
 
 A side project to learn full-stack development: one operations app for the Chutneys business (a restaurant, a cafe and four food trucks in Auckland).
 
-Status: planning. Concept demo shown to the owner on 16 Nov 2026.
+Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
+
+## What's built so far
+
+- **Database** (`supabase/migrations/`): all Phase 1 tables (sites, staff, staff_sites, shifts, checklists, temperature units and readings, cash-ups, daily sales, alerts) with row-level security on every table. Staff see only their sites; owners see everything.
+- **Opening checklist rules** (second migration): staff can start, tick, untick and submit today's run at their own sites. A submitted run is locked. "Today" is the Pacific/Auckland date.
+- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request.
+- **Sites list** (`/sites`): your sites with today's opening checklist status (not started, in progress, done).
+- **Opening checklist** (`/sites/[siteId]`): tick items, see who ticked what and when, submit once everything is ticked. Has loading and error screens.
+- **Tests**: unit tests for NZ dates and checklist status (`web/lib/*.test.ts`), pgTAP tests for the checklist RLS rules (`supabase/tests/`).
+- **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase, and a production build.
+
+## Daily start
+
+Run from the repo root unless it says `web/`. Docker Desktop must be running first.
+
+1. `git switch main` then `git pull`, then make a branch for today's work: `git switch -c my-branch`.
+2. `npx supabase start` - starts the local database, auth and API in Docker. Prints the URLs and keys.
+3. If a migration or `seed.sql` changed since last time: `npx supabase db reset`. This rebuilds the local database from scratch, so it also wipes your local test users (see Known follow-ups).
+4. Check `web/.env.local` has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (copy them from `npx supabase status`).
+5. `cd web` then `npm run dev`, and open http://localhost:3000. Studio (the database UI) is at http://localhost:54323.
+6. Before pushing: `npm test` and `npm run lint` in `web/`, and `npx supabase test db` in the root.
+7. End of day: `npx supabase stop`.
+
+## Known follow-ups
+
+- **Test users are not in the seed.** After every `db reset` you have to recreate users in Auth and add their `staff` and `staff_sites` rows by hand. Add them to `seed.sql` instead.
+- **`supabase/snippets/` is committed.** These are Studio scratch queries, and one changes site names and inserts a site. That data is already in `seed.sql`, so delete the folder and git-ignore it, so schema and data changes only happen through migrations and the seed.
+- **`web/README.md` is still the create-next-app boilerplate.** Replace it or point it to this README.
+- **Root `package.json`** still has the placeholder `test` script and `main` field from `npm init`.
+- **Rest of Phase 1:** closing checklist, temperature logs (fridge 5 C or below, hot hold 60 C or above), cash-up with manual daily sales, owner dashboard, nightly Slack summary, PWA install (manifest and icons).
+- **Midnight cut-off:** checklist rules use "today in NZ", so a closing checklist that runs past midnight can't be submitted. Handle this when building closing checklists.
+- **`cash_ups.cash_date`** still defaults to UTC `current_date` (the same bug fixed for checklists). Fix it in the cash-up slice.
+- **Checklist items in `seed.sql` are drafts.** Replace them with Chutneys' real procedures after checking with the owner.
+- **Dark mode:** the checklist submit bar uses `bg-white` and looks out of place on dark screens.
+- **Labels:** use "5°C" instead of "5 C".
+- **Database types:** generate them with `supabase gen types` to replace the `as` casts in page code.
+- **Saving state:** show "saving..." on checklist rows while a tick is being saved (`useFormStatus`).
 
 ## The idea
 
@@ -76,6 +113,10 @@ Owner answers (fill in after the meeting):
 ## Files
 
 - `CLAUDE.md` - project context for Claude Code
-- `supabase/schema.sql` - Phase 1 database tables
+- `supabase/migrations/` - database tables, RLS policies and functions, applied in date order
 - `supabase/seed.sql` - sample data matching the concept demo
+- `supabase/tests/` - pgTAP tests for the RLS rules
+- `web/` - the Next.js app
+- `.github/workflows/ci.yml` - CI checks on pull requests
+- `.gitattributes` - keeps line endings as LF for everyone
 - `demo-source/` - the concept demo screens (they run inside Claude's design canvas, kept here for reference)
