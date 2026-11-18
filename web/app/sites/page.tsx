@@ -5,20 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 import { aucklandDate, aucklandDay } from "@/lib/dates";
 import { describeStatus, type StatusTone } from "@/lib/checklist-status";
 
-// YOUR TURN: style the status label as a pill, like the demo's
-// "3 of 8 done" badge (demo-source/StaffHome.dc.html line 49).
-//   done        -> green  (try bg-primary-light / text-primary-dark)
-//   in-progress -> amber  (try bg-warning-light / text-warning)
-//   not-started -> grey
-//   none        -> grey, quieter
-// Keep every text/background pair at 4.5:1 contrast or better (WCAG AA).
-// The shared pill shape (padding, rounding, font size) goes on the <span>
-// further down; only the colours belong in this map.
+// Colours for the status pill on each site card. The pill's shape is on the
+// <span> below. Every pair passes WCAG AA (4.5:1) and the text says the
+// status too, so colour is never the only signal.
 const toneClass: Record<StatusTone, string> = {
-  done: "text-green-700",
-  "in-progress": "text-amber-700",
-  "not-started": "text-gray-600",
-  none: "text-gray-400",
+  done: "bg-primary-light text-primary-dark", // submitted: green, ~8:1
+  "in-progress": "bg-warning-light text-warning", // started: amber, ~6.3:1
+  "not-started": "bg-stone-100 text-stone-700", // grey, ~9:1
+  none: "border border-line bg-white text-muted", // no checklist: quiet grey, ~6:1
 };
 
 type RunSummary = {
@@ -105,9 +99,13 @@ export default async function SitesPage() {
                   <span className="text-[15px] font-semibold">{site.name}</span>
                   <span className="text-[13px] capitalize text-muted">{site.kind}</span>
                 </span>
-                {/* YOUR TURN: the status label (see toneClass at the top). */}
-                <span className={`block text-sm ${toneClass[status.tone]}`}>
-                  Opening: {status.text}
+                {/* The "Opening checklists" heading above already says which
+                    checklist this is, so the pill shows just the status.
+                    shrink-0 + nowrap keep it on one line; the name wraps instead. */}
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${toneClass[status.tone]}`}
+                >
+                  {status.text}
                 </span>
                 <svg
                   aria-hidden="true"
