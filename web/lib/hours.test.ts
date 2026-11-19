@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  aucklandLocalToUtc,
   crossesMidnight,
+  isStaleOpen,
+  toAucklandLocalInput,
   formatDuration,
   shiftMinutes,
   shiftsThisWeek,
@@ -67,4 +70,44 @@ test("this week uses the Auckland date of clock_in", () => {
     { clock_in: "2026-11-15T10:00:00Z", clock_out: "2026-11-15T14:00:00Z" },
   ];
   assert.deepEqual(shiftsThisWeek(shifts, "2026-11-20"), [shifts[0]]);
+});
+
+test("a forgotten clock-out (open over 14 hours) counts zero, like the database", () => {
+  const now = new Date("2026-11-20T23:00:00Z");
+  const stale = { clock_in: "2026-11-20T08:00:00Z", clock_out: null }; // 15 hours ago
+  const fresh = { clock_in: "2026-11-20T10:00:00Z", clock_out: null }; // 13 hours ago
+  assert.equal(isStaleOpen(stale, now), true);
+  assert.equal(shiftMinutes(stale, now), 0);
+  assert.equal(isStaleOpen(fresh, now), false);
+  assert.equal(shiftMinutes(fresh, now), 13 * 60);
+  // A closed long shift is real hours, not stale.
+  assert.equal(shiftMinutes({ clock_in: "2026-11-20T08:00:00Z", clock_out: "2026-11-20T23:00:00Z" }, now), 15 * 60);
+});
+
+test("Auckland summer time (NZDT, UTC+13) to UTC", () => {
+  assert.equal(aucklandLocalToUtc("2026-11-20T17:30")?.toISOString(), "2026-11-20T04:30:00.000Z");
+});
+
+test("Auckland winter time (NZST, UTC+12) to UTC", () => {
+  assert.equal(aucklandLocalToUtc("2026-07-01T09:00")?.toISOString(), "2026-06-30T21:00:00.000Z");
+});
+
+test("just after midnight in Auckland is still the day before in UTC", () => {
+  assert.equal(aucklandLocalToUtc("2026-11-21T00:30")?.toISOString(), "2026-11-20T11:30:00.000Z");
+});
+
+test("the day daylight saving starts (27 Sep 2026): morning is already UTC+13", () => {
+  assert.equal(aucklandLocalToUtc("2026-09-27T09:00")?.toISOString(), "2026-09-26T20:00:00.000Z");
+  assert.equal(aucklandLocalToUtc("2026-09-27T01:30")?.toISOString(), "2026-09-26T13:30:00.000Z");
+});
+
+test("bad input gives null", () => {
+  assert.equal(aucklandLocalToUtc("2026-02-30T10:00"), null);
+  assert.equal(aucklandLocalToUtc("tomorrow"), null);
+  assert.equal(aucklandLocalToUtc("2026-11-20 17:30"), null);
+});
+
+test("UTC back to the Auckland picker format round-trips", () => {
+  assert.equal(toAucklandLocalInput("2026-11-20T04:30:00Z"), "2026-11-20T17:30");
+  assert.equal(toAucklandLocalInput(aucklandLocalToUtc("2026-07-01T09:00")!), "2026-07-01T09:00");
 });

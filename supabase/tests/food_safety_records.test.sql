@@ -215,13 +215,16 @@ select lives_ok(
   $$ select set_my_pin('1234') $$,
   'a manager can set a PIN');
 
-select throws_ok(
-  $$ select sign_off_sheet((select id from record_sheets where template_code = 'test_fridge'), '9999') $$,
-  '28P01', null,
+-- A wrong PIN returns a status instead of raising, so the attempt counter
+-- it saves isn't rolled back (see the pin_lockout migration).
+select is(
+  sign_off_sheet((select id from record_sheets where template_code = 'test_fridge'), '9999')->>'status',
+  'wrong_pin',
   'a manager with the wrong PIN cannot sign off');
 
-select lives_ok(
-  $$ select sign_off_sheet((select id from record_sheets where template_code = 'test_fridge'), '1234') $$,
+select is(
+  sign_off_sheet((select id from record_sheets where template_code = 'test_fridge'), '1234')->>'status',
+  'ok',
   'a manager with the right PIN can sign off');
 
 select isnt(
