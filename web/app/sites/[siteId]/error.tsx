@@ -13,17 +13,22 @@ export default function ChecklistError({ error, retry }: { error: unknown; retry
   const message = error instanceof Error ? error.message : null;
 
   return (
-    <main className="mx-auto w-full max-w-md p-4">
-      <h1 className="text-xl font-bold">That didn&apos;t save</h1>
-      <p className="mt-2 text-gray-700">Check your connection and try again.</p>
-      {message && <p className="mt-2 text-sm text-gray-500">{message}</p>}
+    <main className="mx-auto w-full max-w-md px-4 py-6">
+      <div role="alert" className="rounded-[14px] border border-warning/30 bg-warning-light p-4">
+        <h1 className="text-xl font-bold text-warning">That didn&apos;t save</h1>
+        <p className="mt-1 text-ink">Check your connection and try again.</p>
+        {message && <p className="mt-2 text-sm break-words text-muted">{message}</p>}
+      </div>
       <button
         onClick={() => retry()}
-        className="mt-4 min-h-12 w-full rounded-lg bg-green-700 px-4 py-3 font-semibold text-white"
+        className="mt-4 min-h-[50px] w-full rounded-xl bg-primary px-4 font-semibold text-white hover:bg-primary-dark"
       >
         Try again
       </button>
-      <Link href="/sites" className="mt-4 inline-block py-2 underline">
+      <Link
+        href="/sites"
+        className="mt-2 flex min-h-11 items-center justify-center text-sm font-medium text-primary hover:text-primary-dark"
+      >
         Back to all sites
       </Link>
     </main>

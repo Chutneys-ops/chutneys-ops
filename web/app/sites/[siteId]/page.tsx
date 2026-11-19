@@ -55,7 +55,13 @@ export default async function SiteChecklistPage({ params }: PageProps<"/sites/[s
 
   if (itemsResult.error || runResult.error) {
     const message = (itemsResult.error ?? runResult.error)?.message;
-    return <p className="p-4">Could not load the checklist: {message}</p>;
+    return (
+      <main className="mx-auto w-full max-w-md px-4 py-6">
+        <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">
+          Could not load the checklist: {message}
+        </p>
+      </main>
+    );
   }
 
   const items = (itemsResult.data ?? []) as Item[];
@@ -67,23 +73,53 @@ export default async function SiteChecklistPage({ params }: PageProps<"/sites/[s
   const locked = Boolean(run?.submitted_at);
 
   return (
-    // pb-28 leaves room for the submit bar fixed to the bottom of the screen.
-    <main className="mx-auto w-full max-w-md p-4 pb-28">
-      <Link href="/sites" className="inline-block py-2 text-sm underline">
-        ← All sites
+    // pb-32 leaves room for the submit bar fixed to the bottom of the screen.
+    <main className="mx-auto w-full max-w-md px-4 pt-2 pb-32">
+      <Link
+        href="/sites"
+        className="-ml-1 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:text-primary-dark"
+      >
+        <svg
+          aria-hidden="true"
+          className="h-[18px] w-[18px]"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M15 6l-6 6 6 6" />
+        </svg>
+        All sites
       </Link>
 
-      <h1 className="mt-2 text-xl font-bold">{site.name}</h1>
-      <p className="text-sm text-gray-600">Opening checklist · {aucklandDay()}</p>
+      <p className="mt-1 text-[13px] text-muted">{aucklandDay()}</p>
+      <h1 className="mt-1 text-[26px] leading-tight font-bold">{site.name}</h1>
+      <p className="text-sm text-muted">Opening checklist</p>
 
-      <p className="mt-3 font-medium" aria-live="polite">
-        {done} of {items.length} done
-      </p>
+      <div className="mt-4 flex justify-between gap-3 text-[13px] text-muted">
+        <span className="font-medium text-ink" aria-live="polite">
+          {done} of {items.length} done
+        </span>
+        <span>Each tick saves the time and your name</span>
+      </div>
+      {items.length > 0 && (
+        // Decorative: the "x of y done" text above says the same thing.
+        <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded-full bg-line">
+          <div
+            className="h-full rounded-full bg-primary transition-[width]"
+            style={{ width: `${Math.round((done / items.length) * 100)}%` }}
+          />
+        </div>
+      )}
 
       {items.length === 0 ? (
-        <p className="mt-4">There is no opening checklist for this kind of site yet.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-line bg-white p-4 text-muted">
+          There is no opening checklist for this kind of site yet.
+        </p>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-4 space-y-2">
           {items.map((item) => {
             const tick = ticks.get(item.id);
             return (
@@ -99,10 +135,15 @@ export default async function SiteChecklistPage({ params }: PageProps<"/sites/[s
         </ul>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 border-t bg-white p-4">
+      {/* Submit bar. The bottom padding grows on phones with a home-indicator
+          bar (env(safe-area-inset-bottom)) so the button isn't hidden. */}
+      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-cream px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto max-w-md">
           {locked && run?.submitted_at ? (
-            <p className="rounded-lg bg-green-100 p-3 text-center font-medium text-green-900">
+            <p
+              role="status"
+              className="rounded-xl border border-primary/30 bg-primary-light px-3.5 py-3 text-center text-sm font-medium text-primary-dark"
+            >
               Submitted {aucklandTime(run.submitted_at)}
               {run.submitter ? ` by ${run.submitter.name}` : ""}
             </p>
@@ -111,7 +152,7 @@ export default async function SiteChecklistPage({ params }: PageProps<"/sites/[s
               <button
                 type="submit"
                 disabled={!allDone}
-                className="min-h-12 w-full rounded-lg bg-green-700 px-4 py-3 font-semibold text-white disabled:bg-gray-300 disabled:text-gray-600"
+                className="min-h-[50px] w-full rounded-xl bg-primary px-4 text-base font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-line disabled:text-ink"
               >
                 {allDone ? "Submit checklist" : `Tick all ${items.length} items to submit`}
               </button>

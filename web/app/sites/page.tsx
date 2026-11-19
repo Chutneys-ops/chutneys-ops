@@ -2,15 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/app/login/actions";
-import { aucklandDate } from "@/lib/dates";
+import { aucklandDate, aucklandDay } from "@/lib/dates";
 import { describeStatus, type StatusTone } from "@/lib/checklist-status";
 
+// Colours for the status pill on each site card. The pill's shape is on the
+// <span> below. Every pair passes WCAG AA (4.5:1) and the text says the
+// status too, so colour is never the only signal.
 const toneClass: Record<StatusTone, string> = {
-  done: "text-green-700",
-  "in-progress": "text-amber-700",
-  "not-started": "text-gray-600",
-  none: "text-gray-400",
+  done: "bg-primary-light text-primary-dark", // submitted: green, ~8:1
+  "in-progress": "bg-warning-light text-warning", // started: amber, ~6.3:1
+  "not-started": "bg-stone-100 text-stone-700", // grey, ~9:1
+  none: "border border-line bg-white text-muted", // no checklist: quiet grey, ~6:1
 };
 
 type RunSummary = {
@@ -43,12 +45,24 @@ export default async function SitesPage() {
 
   const error = sitesResult.error ?? itemsResult.error ?? runsResult.error;
   if (error) {
-    return <p className="p-6">Could not load sites: {error.message}</p>;
+    return (
+      <main className="mx-auto w-full max-w-md px-4 py-6">
+        <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">
+          Could not load sites: {error.message}
+        </p>
+      </main>
+    );
   }
 
   const sites = sitesResult.data;
   if (!sites || sites.length === 0) {
-    return <p className="p-6">No sites yet.</p>;
+    return (
+      <main className="mx-auto w-full max-w-md px-4 py-6">
+        <p className="rounded-xl border border-dashed border-line bg-white p-4 text-muted">
+          No sites yet.
+        </p>
+      </main>
+    );
   }
 
   // How many opening items each kind of site has, e.g. { truck: 8, cafe: 9 }.
@@ -62,10 +76,12 @@ export default async function SitesPage() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-md p-4">
-      <h1 className="mb-4 text-2xl font-bold">Sites</h1>
+    <main className="mx-auto w-full max-w-md px-4 py-6">
+      <p className="text-[13px] text-muted">{aucklandDay()}</p>
+      <h1 className="mt-1 text-3xl font-bold">Sites</h1>
+      <p className="mt-4 text-[13px] font-semibold text-muted">Opening checklists</p>
 
-      <ul className="space-y-2">
+      <ul className="mt-2.5 space-y-2.5">
         {sites.map((site) => {
           const run = runBySite.get(site.id);
           const status = describeStatus({
@@ -77,22 +93,37 @@ export default async function SitesPage() {
             <li key={site.id}>
               <Link
                 href={`/sites/${site.id}`}
-                className="block rounded-lg border p-3 active:bg-gray-100"
+                className="flex min-h-16 items-center gap-3 rounded-[14px] border border-line bg-white px-4 py-3.5 text-ink hover:border-muted active:bg-primary-light"
               >
-                <span className="block font-semibold">{site.name}</span>
-                <span className="text-sm text-gray-500">{site.kind}</span>
-                <span className={`block text-sm ${toneClass[status.tone]}`}>
-                  Opening: {status.text}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-[15px] font-semibold">{site.name}</span>
+                  <span className="text-[13px] capitalize text-muted">{site.kind}</span>
                 </span>
+                {/* The "Opening checklists" heading above already says which
+                    checklist this is, so the pill shows just the status.
+                    shrink-0 + nowrap keep it on one line; the name wraps instead. */}
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${toneClass[status.tone]}`}
+                >
+                  {status.text}
+                </span>
+                <svg
+                  aria-hidden="true"
+                  className="h-[18px] w-[18px] shrink-0 text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
               </Link>
             </li>
           );
         })}
       </ul>
-
-      <form action={logout}>
-        <button className="mt-6 py-2 underline">Sign out</button>
-      </form>
     </main>
   );
 }

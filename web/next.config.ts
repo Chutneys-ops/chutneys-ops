@@ -19,6 +19,13 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // There is no home page yet: send everyone to the sites list.
+  // /sites itself sends signed-out visitors on to /login.
+  // permanent: false gives a 307, so browsers don't cache it and a real
+  // home page can replace it later.
+  async redirects() {
+    return [{ source: "/", destination: "/sites", permanent: false }];
+  },
 };
 
 export default nextConfig;

@@ -11,6 +11,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
 - **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request.
 - **Sites list** (`/sites`): your sites with today's opening checklist status (not started, in progress, done).
 - **Opening checklist** (`/sites/[siteId]`): tick items, see who ticked what and when, submit once everything is ticked. Has loading and error screens.
+- **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, an app header, and restyled login, sites, checklist, loading and error screens. Light theme only for now.
 - **Tests**: unit tests for NZ dates and checklist status (`web/lib/*.test.ts`), pgTAP tests for the checklist RLS rules (`supabase/tests/`).
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase, and a production build.
 
@@ -36,7 +37,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - **Midnight cut-off:** checklist rules use "today in NZ", so a closing checklist that runs past midnight can't be submitted. Handle this when building closing checklists.
 - **`cash_ups.cash_date`** still defaults to UTC `current_date` (the same bug fixed for checklists). Fix it in the cash-up slice.
 - **Checklist items in `seed.sql` are drafts.** Replace them with Chutneys' real procedures after checking with the owner.
-- **Dark mode:** the checklist submit bar uses `bg-white` and looks out of place on dark screens.
+- ~~**Dark mode:** the checklist submit bar uses `bg-white` and looks out of place on dark screens.~~ Done: the design pass made the app light-only, and the submit bar now uses the cream background.
 - **Labels:** use "5°C" instead of "5 C".
 - **Database types:** generate them with `supabase gen types` to replace the `as` casts in page code.
 - **Saving state:** show "saving..." on checklist rows while a tick is being saved (`useFormStatus`).
