@@ -3,12 +3,13 @@
 // Server actions for one record sheet: add an entry, sign the sheet off.
 //
 // Never trust the arguments: anyone can call a server action with any ids or
-// values. The real guards are in the database (grants, RLS, the
-// record_entries trigger, sign_off_sheet). The checks here only exist to
-// give friendly messages before the database says no.
+// values. The real guards are in the database (grants, RLS with
+// on_shift_at, the record_entries trigger, sign_off_sheet). The checks here
+// only give friendly messages before the database says no.
 
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentShift } from "@/lib/supabase/session";
 import { aucklandDate } from "@/lib/dates";
 import { findOutOfRange, parseEntryForm, type EntryValues, type RecordField } from "@/lib/records";
 import type { EntryTarget, FormState } from "./form-state";
@@ -49,7 +50,7 @@ async function findTodaySheet(supabase: Supabase, siteId: string, code: string) 
     .maybeSingle();
 }
 
-/** Today's sheet, created on the first entry. Same pattern as the checklist. */
+/** Today's sheet at the site, created on the first entry. */
 async function getOrCreateTodaySheet(
   supabase: Supabase,
   siteId: string,
@@ -75,16 +76,11 @@ async function getOrCreateTodaySheet(
 }
 
 async function entryValues(supabase: Supabase, entryId: string): Promise<EntryValues | null> {
-  const { data } = await supabase
-    .from("record_entries")
-    .select("values, continues_entry_id")
-    .eq("id", entryId)
-    .maybeSingle();
+  const { data } = await supabase.from("record_entries").select("values").eq("id", entryId).maybeSingle();
   return data ? (data.values as EntryValues) : null;
 }
 
 export async function addEntry(
-  siteId: string,
   code: string,
   target: EntryTarget,
   prev: FormState,
@@ -101,7 +97,8 @@ export async function addEntry(
 
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getClaims();
-  if (!auth?.claims?.sub) return fail("You are signed out. Sign in again.");
+  const userId = auth?.claims?.sub;
+  if (!userId) return fail("You are signed out. Sign in again.");
 
   // Read the fields from the database, not from the browser.
   const { data: template } = await supabase
@@ -119,7 +116,10 @@ export async function addEntry(
   let continuesId: string | null = null;
 
   if (target.kind === "new") {
-    const sheet = await getOrCreateTodaySheet(supabase, siteId, code);
+    // The site is wherever you're clocked in, never something from the page.
+    const shift = await getCurrentShift(supabase, userId);
+    if (!shift) return fail("Clock in at a site first (Change site, at the top).");
+    const sheet = await getOrCreateTodaySheet(supabase, shift.site.id, code);
     if ("error" in sheet) return fail(sheet.error);
     if (sheet.signed_off_at) return fail("This sheet is signed off. Add a correction instead.");
     sheetId = sheet.id;
@@ -155,11 +155,13 @@ export async function addEntry(
     },
     { skipRequired },
   );
+  // "note" is the Comments box: optional, except on corrections.
   const note = formText(formData, "note");
   const correctiveAction = formText(formData, "corrective_action");
 
   const errors = { ...parsed.errors };
   if (target.kind === "correction" && !note) errors.note = "Say what was wrong with the original entry";
+  if (note.length > 500) errors.note = "Comments are too long (500 characters at most)";
   const outOfRange = findOutOfRange(fields, { ...base, ...parsed.values }).length > 0;
   if (outOfRange && !correctiveAction) {
     errors.corrective_action = "Out of range: say what you did about it";
@@ -183,13 +185,7 @@ export async function addEntry(
   return { seq, ok: true, message: "Saved" };
 }
 
-export async function signOff(
-  siteId: string,
-  code: string,
-  sheetId: string,
-  prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
+export async function signOff(sheetId: string, prev: FormState, formData: FormData): Promise<FormState> {
   const seq = prev.seq + 1;
   // Never send the PIN back to the browser in `values`.
   const fail = (message: string): FormState => ({ seq, message, errors: { pin: message } });
@@ -201,7 +197,7 @@ export async function signOff(
   const { data: auth } = await supabase.auth.getClaims();
   if (!auth?.claims?.sub) return fail("You are signed out. Sign in again.");
 
-  // sign_off_sheet checks your role, the site and the PIN, then stamps
+  // sign_off_sheet checks you're a manager or owner and the PIN, then stamps
   // signed_off_by and signed_off_at itself.
   const { error } = await supabase.rpc("sign_off_sheet", { sheet_id: sheetId, pin });
   if (error) return fail(dbMessage(error, "Could not sign off"));

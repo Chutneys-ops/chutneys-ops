@@ -48,3 +48,27 @@ export function previousDate(ymd: string): string {
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
+
+const shortDayFormat = new Intl.DateTimeFormat("en-NZ", {
+  timeZone: TZ,
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
+/** "Fri 20 Nov" in Auckland time. */
+export function aucklandShortDay(value: string | Date): string {
+  return shortDayFormat.format(new Date(value)).replace(",", "");
+}
+
+const ymdFormat = new Intl.DateTimeFormat("en-NZ", {
+  timeZone: "UTC", // a plain date has no time or zone; UTC leaves it unchanged
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+
+/** "2026-11-20" -> "Friday, 20 November". */
+export function formatYmd(ymd: string): string {
+  return ymdFormat.format(new Date(`${ymd}T00:00:00Z`));
+}

@@ -25,7 +25,8 @@ export async function login(
   }
 
   // redirect() throws, so it must be outside any try/catch.
-  redirect("/sites");
+  // /start sends you to Records if you are already clocked in somewhere.
+  redirect("/start");
 }
 
 export async function logout() {

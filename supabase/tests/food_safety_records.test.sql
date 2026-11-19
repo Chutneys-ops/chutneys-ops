@@ -7,7 +7,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(35);
 
 -- Setup (as postgres, which skips RLS) ---------------------------------------
--- Ana (staff) and Mia (manager) work on test truck A. Ben (staff) on truck B.
+-- Ana (staff) works on test truck A today, Ben (staff) on truck B, Mia is a manager.
 insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-00000000000a', 'ana@test.local'),
   ('b0000000-0000-0000-0000-00000000000b', 'ben@test.local'),
@@ -19,10 +19,12 @@ insert into staff (id, name, role) values
 insert into sites (id, name, kind) values
   ('10000000-0000-0000-0000-00000000000a', 'Test truck A', 'truck'),
   ('10000000-0000-0000-0000-00000000000b', 'Test truck B', 'truck');
-insert into staff_sites (staff_id, site_id) values
-  ('a0000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a'),
-  ('b0000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-00000000000b'),
-  ('c0000000-0000-0000-0000-00000000000c', '10000000-0000-0000-0000-00000000000a');
+-- Access comes from open shifts (not staff_sites): Ana is on shift at A,
+-- Ben at B. Mia is a manager, so she can view and sign off anywhere
+-- without a shift.
+insert into shifts (site_id, staff_id) values
+  ('10000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-00000000000a'),
+  ('10000000-0000-0000-0000-00000000000b', 'b0000000-0000-0000-0000-00000000000b');
 insert into temp_units (id, site_id, name, max_c) values
   ('30000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 'Test fridge A', 5),
   ('30000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-00000000000b', 'Test fridge B', 5);

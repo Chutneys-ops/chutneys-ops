@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
-import { createClient } from "@/lib/supabase/server";
-import { aucklandDate, aucklandDay, aucklandTime, previousDate } from "@/lib/dates";
+import { NotStaff } from "@/components/not-staff";
+import { aucklandTime, formatYmd, previousDate } from "@/lib/dates";
 import {
   formatValue,
   groupEntries,
@@ -11,6 +11,8 @@ import {
   pendingLaterFields,
   type RecordField,
 } from "@/lib/records";
+import { createClient } from "@/lib/supabase/server";
+import { getRecordsView } from "../view";
 import { addEntry, signOff } from "./actions";
 import { EntryForm } from "./entry-form";
 import { EntryGroupCard, type EntryRow } from "./entry-group";
@@ -27,7 +29,7 @@ type Sheet = {
 };
 
 // "recorder:staff!recorded_by(name)" follows the recorded_by foreign key to
-// staff and calls the result "recorder" (same trick as the checklist page).
+// staff and calls the result "recorder".
 const SHEET_SELECT = `
   id, sheet_date, started_at, signed_off_at,
   starter:staff!started_by(name),
@@ -57,22 +59,17 @@ function NextReading({ children }: { children: ReactNode }) {
   );
 }
 
-export default async function RecordSheetPage({
-  params,
-}: PageProps<"/sites/[siteId]/records/[code]">) {
+export default async function RecordSheetPage({ params, searchParams }: PageProps<"/records/[code]">) {
   await connection();
-  const { siteId, code } = await params;
+  const { code } = await params;
   const supabase = await createClient();
+  // Site and date come from your open shift (staff) or the filter (managers).
+  const view = await getRecordsView(supabase, await searchParams);
+  if (!view) return <NotStaff />;
+  const { site, date } = view;
+  const yesterday = previousDate(date);
 
-  const { data: auth } = await supabase.auth.getClaims();
-  const userId = auth?.claims?.sub;
-  if (!userId) redirect("/login");
-
-  const today = aucklandDate();
-  const yesterday = previousDate(today);
-
-  const [siteResult, templateResult, sheetsResult, unitsResult, meResult] = await Promise.all([
-    supabase.from("sites").select("id, name, kind").eq("id", siteId).maybeSingle(),
+  const [templateResult, sheetsResult, unitsResult] = await Promise.all([
     supabase
       .from("record_templates")
       .select("code, title, description, period, fields, site_kinds, active")
@@ -81,17 +78,15 @@ export default async function RecordSheetPage({
     supabase
       .from("record_sheets")
       .select(SHEET_SELECT)
-      .eq("site_id", siteId)
+      .eq("site_id", site.id)
       .eq("template_code", code)
-      .in("sheet_date", [today, yesterday]),
-    supabase.from("temp_units").select("id, name").eq("site_id", siteId).order("name"),
-    supabase.from("staff").select("role").eq("id", userId).maybeSingle(),
+      .in("sheet_date", [date, yesterday]),
+    supabase.from("temp_units").select("id, name").eq("site_id", site.id).order("name"),
   ]);
 
-  const site = siteResult.data;
   const template = templateResult.data;
-  // Not your site, no such template, or not one for this kind of site: 404.
-  if (!site || !template || !template.active || !template.site_kinds.includes(site.kind)) notFound();
+  // No such template, or not one for this kind of site: 404.
+  if (!template || !template.active || !template.site_kinds.includes(site.kind)) notFound();
 
   const error = sheetsResult.error ?? unitsResult.error;
   if (error) {
@@ -108,19 +103,20 @@ export default async function RecordSheetPage({
   const units = unitsResult.data ?? [];
   const unitNames = Object.fromEntries(units.map((u) => [u.id, u.name]));
   const sheets = (sheetsResult.data ?? []) as unknown as Sheet[];
-  const sheet = sheets.find((s) => s.sheet_date === today) ?? null;
+  const sheet = sheets.find((s) => s.sheet_date === date) ?? null;
   const yesterdaySheet = sheets.find((s) => s.sheet_date === yesterday) ?? null;
 
   const entries = sheet?.record_entries ?? [];
   const groups = groupEntries(entries);
   const signed = Boolean(sheet?.signed_off_at);
-  const canSign = meResult.data?.role === "manager" || meResult.data?.role === "owner";
+  // Writing needs an open shift here, today (the database checks this too).
+  const canAdd = view.canAdd;
   const hasLater = fields.some((f) => f.later);
 
   // Batter made last night is ready this morning: offer yesterday's
   // unfinished records too, while that sheet isn't signed off.
   const carriedOver =
-    hasLater && yesterdaySheet && !yesterdaySheet.signed_off_at
+    canAdd && hasLater && yesterdaySheet && !yesterdaySheet.signed_off_at
       ? groupEntries(yesterdaySheet.record_entries).filter(
           (g) => pendingLaterFields(fields, groupValues(g)).length > 0,
         )
@@ -145,11 +141,7 @@ export default async function RecordSheetPage({
     return (
       <NextReading>
         <EntryForm
-          action={addEntry.bind(null, siteId, code, {
-            kind: "followup",
-            sheetId,
-            entryId: group.root.entry.id,
-          })}
+          action={addEntry.bind(null, code, { kind: "followup", sheetId, entryId: group.root.entry.id })}
           fields={pending}
           units={units}
           mode="followup"
@@ -163,7 +155,7 @@ export default async function RecordSheetPage({
   return (
     <main className="mx-auto w-full max-w-md px-4 pt-2 pb-8">
       <Link
-        href={`/sites/${siteId}/records`}
+        href={`/records${view.query}`}
         className="-ml-1 inline-flex min-h-12 items-center gap-1 text-sm font-medium text-primary hover:text-primary-dark"
       >
         <svg
@@ -181,7 +173,7 @@ export default async function RecordSheetPage({
         All records
       </Link>
 
-      <p className="mt-1 text-[13px] text-muted">{aucklandDay()}</p>
+      <p className="mt-1 text-[13px] text-muted">{formatYmd(date)}</p>
       <h1 className="mt-1 text-[26px] leading-tight font-bold">{template.title}</h1>
       <p className="text-sm text-muted">{site.name}</p>
       {template.description && <p className="mt-2 text-[15px] text-ink">{template.description}</p>}
@@ -189,7 +181,9 @@ export default async function RecordSheetPage({
       <p className="mt-3 text-[13px] text-muted">
         {sheet
           ? `Started ${aucklandTime(sheet.started_at)} by ${sheet.starter?.name ?? "a team member"}`
-          : "Not started yet today"}
+          : date === view.today
+            ? "Not started yet today"
+            : "Nothing was recorded this day"}
       </p>
 
       {signed && sheet?.signed_off_at && (
@@ -216,26 +210,28 @@ export default async function RecordSheetPage({
       )}
 
       <section className="mt-5">
-        <h2 className="text-[13px] font-semibold text-muted">Today&apos;s entries</h2>
+        <h2 className="text-[13px] font-semibold text-muted">
+          {date === view.today ? "Today's entries" : "Entries"}
+        </h2>
         {groups.length === 0 ? (
           <p className="mt-2.5 rounded-xl border border-dashed border-line bg-white p-4 text-muted">
-            No entries yet today.
+            No entries {date === view.today ? "yet today" : "this day"}.
           </p>
         ) : (
           <ul className="mt-2.5 space-y-2.5">
             {groups.map((group) => (
               <EntryGroupCard key={group.root.entry.id} group={group} fields={fields} unitNames={unitNames}>
-                {!signed && sheet && followUpForm(sheet.id, group)}
+                {canAdd && !signed && sheet && followUpForm(sheet.id, group)}
               </EntryGroupCard>
             ))}
           </ul>
         )}
       </section>
 
-      {!signed && (
+      {canAdd && !signed && (
         <Card title="Add an entry">
           <EntryForm
-            action={addEntry.bind(null, siteId, code, { kind: "new" })}
+            action={addEntry.bind(null, code, { kind: "new" })}
             fields={fields}
             units={units}
             mode="new"
@@ -244,16 +240,16 @@ export default async function RecordSheetPage({
         </Card>
       )}
 
-      {!signed && canSign && sheet && entries.length > 0 && (
+      {view.isManager && !signed && sheet && entries.length > 0 && (
         <Card title="Verify and sign">
           <p className="mb-3 text-sm text-muted">
             Check the entries above, then sign with your PIN. After that, only corrections can be added.
           </p>
-          <SignOffForm action={signOff.bind(null, siteId, code, sheet.id)} />
+          <SignOffForm action={signOff.bind(null, sheet.id)} />
         </Card>
       )}
 
-      {sheet && correctable.length > 0 && (
+      {canAdd && sheet && correctable.length > 0 && (
         <details className="group mt-5 rounded-[14px] border border-line bg-white">
           <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 font-semibold text-ink">
             Add correction
@@ -273,10 +269,10 @@ export default async function RecordSheetPage({
           <div className="border-t border-line p-4">
             <p className="mb-3 text-sm text-muted">
               Entries can&apos;t be edited or deleted. Re-enter the right values here and say what was
-              wrong; the original stays on the record.
+              wrong in Comments; the original stays on the record.
             </p>
             <EntryForm
-              action={addEntry.bind(null, siteId, code, { kind: "correction", sheetId: sheet.id })}
+              action={addEntry.bind(null, code, { kind: "correction", sheetId: sheet.id })}
               fields={fields}
               units={units}
               mode="correction"

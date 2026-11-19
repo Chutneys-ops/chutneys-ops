@@ -89,6 +89,16 @@ function OutOfRange({ entry }: { entry: EntryRow }) {
   );
 }
 
+/** The optional "Comments" box (the note column). Required on corrections. */
+function Comments({ entry }: { entry: EntryRow }) {
+  if (!entry.note) return null;
+  return (
+    <p className="mt-2 text-sm text-ink">
+      <span className="font-semibold">Comments:</span> {entry.note}
+    </p>
+  );
+}
+
 function EntryBlock({
   node,
   fields,
@@ -104,15 +114,16 @@ function EntryBlock({
         <Meta entry={node.entry} />
         <Values entry={node.entry} fields={fields} unitNames={unitNames} base={base} />
         <OutOfRange entry={node.entry} />
+        <Comments entry={node.entry} />
         {corrected && <p className="mt-1 text-xs font-semibold text-muted">Corrected below</p>}
       </div>
       {node.corrections.map((correction) => (
         <div key={correction.id} className="mt-2.5 border-l-4 border-primary/40 pl-3">
           <p className="text-xs font-semibold tracking-wide text-primary-dark uppercase">Correction</p>
           <Meta entry={correction} />
-          {correction.note && <p className="mt-0.5 text-sm text-ink">Why: {correction.note}</p>}
           <Values entry={correction} fields={fields} unitNames={unitNames} base={base} />
           <OutOfRange entry={correction} />
+          <Comments entry={correction} />
         </div>
       ))}
     </div>

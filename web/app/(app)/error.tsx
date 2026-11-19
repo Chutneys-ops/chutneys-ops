@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
-export default function ChecklistError({ error, retry }: { error: unknown; retry: () => void }) {
+export default function AppError({ error, retry }: { error: unknown; retry: () => void }) {
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -26,10 +26,10 @@ export default function ChecklistError({ error, retry }: { error: unknown; retry
         Try again
       </button>
       <Link
-        href="/sites"
+        href="/records"
         className="mt-2 flex min-h-11 items-center justify-center text-sm font-medium text-primary hover:text-primary-dark"
       >
-        Back to all sites
+        Back to records
       </Link>
     </main>
   );

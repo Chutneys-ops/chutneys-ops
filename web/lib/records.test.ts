@@ -170,3 +170,15 @@ test("grouping: follow-ups under their entry, corrections attached", () => {
   ];
   assert.deepEqual(pendingLaterFields(later, groupValues(groups[0])).map((f) => f.key), ["temp_6h"]);
 });
+
+test("yes/no with an expected answer: the other answer is out of range", () => {
+  const check: RecordField = { key: "fridges", label: "Fridges OK", type: "yes_no", required: true, expect: true };
+  assert.equal(isOutOfRange(check, false), true);
+  assert.equal(isOutOfRange(check, true), false);
+  // No expectation: either answer is fine.
+  assert.equal(isOutOfRange({ ...check, expect: undefined }, false), false);
+  assert.deepEqual(
+    findOutOfRange([check], parseEntryForm([check], form({ fridges: "no" })).values),
+    ["fridges"],
+  );
+});

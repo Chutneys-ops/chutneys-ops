@@ -141,23 +141,28 @@ function EntryFormBody({
         </div>
       )}
 
-      {mode === "correction" && (
-        <div>
+      {/* Comments: optional on every entry, required on corrections (the
+          database trigger insists on it too). Stored in the "note" column. */}
+      <div>
           <label htmlFor={`${idPrefix}-note`} className="block text-sm font-semibold text-ink">
-            What was wrong with the original?
+            Comments
+            {mode === "correction" ? (
+              <span className="font-normal text-muted">: what was wrong with the original?</span>
+            ) : (
+              <span className="font-normal text-muted"> (optional)</span>
+            )}
           </label>
           <textarea
             id={`${idPrefix}-note`}
             name="note"
-            required
+            required={mode === "correction"}
             rows={2}
             maxLength={500}
             defaultValue={defaults.note ?? ""}
             className={`${inputClass} mt-1.5 py-2 ${errors.note ? "border-warning" : "border-line"}`}
           />
           {errors.note && <p className="mt-1 text-sm text-warning">{errors.note}</p>}
-        </div>
-      )}
+      </div>
 
       {state.message && (
         <p
@@ -281,7 +286,14 @@ function FieldInput({
               </label>
             ))}
           </div>
-          <Hint id={hintId} error={error} />
+          {/* e.g. "No" on an opening check that expects "Yes". */}
+          {!error && outOfRange ? (
+            <p id={hintId} className="mt-1 text-sm font-medium text-warning">
+              <span aria-hidden="true">⚠ </span>Out of range: say what you did in the box below
+            </p>
+          ) : (
+            <Hint id={hintId} error={error} />
+          )}
         </fieldset>
       );
     default:

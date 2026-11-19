@@ -23,6 +23,8 @@ export type RecordField = {
   range_when?: { field: string; ranges: Record<string, Range> };
   /** Filled in hours later, as a follow-up entry (cooling, batter). */
   later?: boolean;
+  /** yes_no only: the answer that's OK. The other answer is "out of range". */
+  expect?: boolean;
 };
 
 export type RecordTemplate = {
@@ -90,8 +92,12 @@ export function limitText(field: RecordField, values: EntryValues = {}): string 
   return rangeText(limitFor(field), field.unit);
 }
 
-/** Is this number outside the field's limits? Non-numbers are never "out of range". */
+/** Is this value outside the field's limits? A number outside min/max, or a
+ *  yes/no answer that isn't the expected one. Anything else is never out of range. */
 export function isOutOfRange(field: RecordField, value: unknown, values: EntryValues = {}): boolean {
+  if (field.type === "yes_no") {
+    return typeof value === "boolean" && field.expect !== undefined && value !== field.expect;
+  }
   if (field.type !== "number" || typeof value !== "number") return false;
   const { min, max } = limitFor(field, values);
   return (min !== undefined && value < min) || (max !== undefined && value > max);
