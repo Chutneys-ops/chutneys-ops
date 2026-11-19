@@ -1,4 +1,5 @@
-// Placeholder for tabs that aren't built yet (Time, Purchases).
+// Placeholder for a tab that isn't built yet. Not used right now (Purchases
+// replaced it); kept for the next new section.
 export function ComingSoon({ title, blurb }: { title: string; blurb: string }) {
   return (
     <main className="mx-auto w-full max-w-md px-4 py-6">

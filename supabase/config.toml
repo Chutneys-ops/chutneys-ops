@@ -126,6 +126,14 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# Invoice photos and PDFs for purchases. Private: the app shows them with
+# short-lived signed URLs. Access rules are storage policies in
+# supabase/migrations/20261123000000_purchases.sql.
+[storage.buckets.invoices]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

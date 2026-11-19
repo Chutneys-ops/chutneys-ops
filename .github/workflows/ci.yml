@@ -59,11 +59,16 @@ jobs:
 
       # ---- Database: local Supabase stack + RLS tests ----
 
-      # Only Postgres, auth (gotrue), the API gateway (kong) and PostgREST.
+      # Only Postgres, auth (gotrue), the API gateway (kong), PostgREST and
+      # storage (the invoice storage policies and tests need it).
       - name: Start local Supabase
         run: >
           npx supabase start
-          -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+          -x realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      # Create the buckets from supabase/config.toml (the "invoices" bucket).
+      - name: Create storage buckets
+        run: npx supabase seed buckets
 
       - name: RLS tests (pgTAP)
         run: npx supabase test db
