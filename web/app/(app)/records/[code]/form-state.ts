@@ -12,6 +12,11 @@ export type FormState = {
   errors?: Record<string, string>;
   /** What was typed, so nothing is lost when the server says no. */
   values?: Record<string, string>;
+  /** Sign-off only: when the PIN lock ends (ISO time), so the button can
+   *  stay disabled and count down the minutes left. */
+  lockedUntil?: string;
+  /** Minutes left when the server answered, shown until the first tick. */
+  lockedMinutes?: number;
 };
 
 export const initialFormState: FormState = { seq: 0 };

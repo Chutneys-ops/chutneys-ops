@@ -213,7 +213,12 @@ export async function signOff(sheetId: string, prev: FormState, formData: FormDa
   }
   if (result.status === "locked") {
     const minutes = result.minutes ?? 15;
-    return fail(`Too many wrong PINs. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`);
+    // The button shows the minutes left and counts down from lockedUntil.
+    return {
+      ...fail("Too many wrong PINs. Sign-off is locked for now."),
+      lockedUntil: new Date(Date.now() + minutes * 60_000).toISOString(),
+      lockedMinutes: minutes,
+    };
   }
 
   refresh();

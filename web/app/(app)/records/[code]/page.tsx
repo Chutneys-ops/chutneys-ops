@@ -81,7 +81,7 @@ export default async function RecordSheetPage({ params, searchParams }: PageProp
       .eq("site_id", site.id)
       .eq("template_code", code)
       .in("sheet_date", [date, yesterday]),
-    supabase.from("temp_units").select("id, name").eq("site_id", site.id).order("name"),
+    supabase.from("temp_units").select("id, name, min_c, max_c").eq("site_id", site.id).order("name"),
   ]);
 
   const template = templateResult.data;

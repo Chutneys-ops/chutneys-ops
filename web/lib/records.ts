@@ -21,6 +21,8 @@ export type RecordField = {
   options?: string[];
   /** Swap in a different range depending on another field, e.g. chilled or hot. */
   range_when?: { field: string; ranges: Record<string, Range> };
+  /** Key of a temp_unit field: use that unit's own min_c/max_c (fridge vs freezer). */
+  range_from?: string;
   /** Filled in hours later, as a follow-up entry (cooling, batter). */
   later?: boolean;
   /** yes_no only: the answer that's OK. The other answer is "out of range". */
@@ -38,6 +40,9 @@ export type RecordTemplate = {
 export type FieldValue = string | number | boolean;
 export type EntryValues = Record<string, FieldValue | null | undefined>;
 
+/** Each temp unit's own limits, by unit id (from temp_units.min_c / max_c). */
+export type UnitRanges = Record<string, Range>;
+
 const TEXT_MAX = 500;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,7 +54,7 @@ function isBlank(value: unknown): boolean {
 // ---- Ranges ----------------------------------------------------------------
 
 /** The min/max that applies to a number field, given the other values. */
-export function limitFor(field: RecordField, values: EntryValues = {}): Range {
+export function limitFor(field: RecordField, values: EntryValues = {}, units: UnitRanges = {}): Range {
   const range: Range = { min: field.min, max: field.max };
   if (field.range_when) {
     const chosen = values[field.range_when.field];
@@ -57,6 +62,15 @@ export function limitFor(field: RecordField, values: EntryValues = {}): Range {
     if (override) {
       if (override.min !== undefined) range.min = override.min;
       if (override.max !== undefined) range.max = override.max;
+    }
+  }
+  if (field.range_from) {
+    // Like the trigger: each limit the unit has replaces the template's.
+    const chosen = values[field.range_from];
+    const unit = typeof chosen === "string" ? units[chosen] : undefined;
+    if (unit) {
+      if (unit.min !== undefined) range.min = unit.min;
+      if (unit.max !== undefined) range.max = unit.max;
     }
   }
   return range;
@@ -78,8 +92,13 @@ export function rangeText(range: Range, unit?: string): string {
 }
 
 /** The limit to show under a field's label. Lists each case for range_when. */
-export function limitText(field: RecordField, values: EntryValues = {}): string {
+export function limitText(field: RecordField, values: EntryValues = {}, units: UnitRanges = {}): string {
   if (field.type !== "number") return "";
+  if (field.range_from) {
+    const chosen = values[field.range_from];
+    if (typeof chosen !== "string" || !units[chosen]) return "Limit depends on the unit you pick";
+    return rangeText(limitFor(field, values, units), field.unit);
+  }
   if (field.range_when) {
     const chosen = values[field.range_when.field];
     if (typeof chosen === "string" && field.range_when.ranges[chosen]) {
@@ -94,18 +113,23 @@ export function limitText(field: RecordField, values: EntryValues = {}): string 
 
 /** Is this value outside the field's limits? A number outside min/max, or a
  *  yes/no answer that isn't the expected one. Anything else is never out of range. */
-export function isOutOfRange(field: RecordField, value: unknown, values: EntryValues = {}): boolean {
+export function isOutOfRange(
+  field: RecordField,
+  value: unknown,
+  values: EntryValues = {},
+  units: UnitRanges = {},
+): boolean {
   if (field.type === "yes_no") {
     return typeof value === "boolean" && field.expect !== undefined && value !== field.expect;
   }
   if (field.type !== "number" || typeof value !== "number") return false;
-  const { min, max } = limitFor(field, values);
+  const { min, max } = limitFor(field, values, units);
   return (min !== undefined && value < min) || (max !== undefined && value > max);
 }
 
 /** Keys of the fields that are out of range. */
-export function findOutOfRange(fields: RecordField[], values: EntryValues): string[] {
-  return fields.filter((f) => isOutOfRange(f, values[f.key], values)).map((f) => f.key);
+export function findOutOfRange(fields: RecordField[], values: EntryValues, units: UnitRanges = {}): string[] {
+  return fields.filter((f) => isOutOfRange(f, values[f.key], values, units)).map((f) => f.key);
 }
 
 // ---- Parsing a submitted form --------------------------------------------

@@ -16,15 +16,19 @@ import {
   parseEntryForm,
   type EntryValues,
   type RecordField,
+  type UnitRanges,
 } from "@/lib/records";
 import { initialFormState, type FormState } from "./form-state";
 
 type Mode = "new" | "followup" | "correction";
 
+type Unit = { id: string; name: string; min_c: number | null; max_c: number | null };
+
 export type EntryFormProps = {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   fields: RecordField[];
-  units: { id: string; name: string }[];
+  /** The site's fridges and freezers, each with its own limits. */
+  units: Unit[];
   mode: Mode;
   submitLabel: string;
   /** The original entry's values (follow-ups), so "hot"/"chilled" limits work. */
@@ -70,7 +74,14 @@ function EntryFormBody({
   const [live, setLive] = useState<Record<string, string>>(state.values ?? {});
   const typed = parseEntryForm(fields, (key) => live[key] ?? null, { skipRequired: true }).values;
   const allValues = { ...baseValues, ...typed };
-  const outKeys = new Set(findOutOfRange(fields, allValues));
+  // Each unit's own limits, for fields with "range_from" (fridge vs freezer).
+  const unitRanges: UnitRanges = Object.fromEntries(
+    units.map((u) => [
+      u.id,
+      { min: u.min_c === null ? undefined : Number(u.min_c), max: u.max_c === null ? undefined : Number(u.max_c) },
+    ]),
+  );
+  const outKeys = new Set(findOutOfRange(fields, allValues, unitRanges));
   const errors = state.errors ?? {};
   const showAction = outKeys.size > 0 || Boolean(errors.corrective_action);
   const defaults = state.values ?? {};
@@ -118,7 +129,7 @@ function EntryFormBody({
           defaultValue={defaults[field.key] ?? ""}
           error={errors[field.key]}
           outOfRange={outKeys.has(field.key)}
-          limit={limitText(field, allValues)}
+          limit={limitText(field, allValues, unitRanges)}
         />
       ))}
 

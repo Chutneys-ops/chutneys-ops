@@ -70,6 +70,27 @@ test("limit text for the form", () => {
   assert.equal(limitText(arriving, { mode: "hot" }), "60 °C or above");
 });
 
+test("range_from uses the chosen unit's own limits", () => {
+  const unitTemp: RecordField = {
+    key: "temperature",
+    label: "Temperature",
+    type: "number",
+    max: 5,
+    unit: "C",
+    range_from: "unit",
+  };
+  const units = { fridge: { min: 0, max: 5 }, freezer: { min: -25, max: -15 }, old: {} };
+  assert.equal(isOutOfRange(unitTemp, -18, { unit: "freezer" }, units), false);
+  assert.equal(isOutOfRange(unitTemp, -5, { unit: "freezer" }, units), true);
+  assert.equal(isOutOfRange(unitTemp, -30, { unit: "freezer" }, units), true);
+  assert.equal(isOutOfRange(unitTemp, 4, { unit: "fridge" }, units), false);
+  assert.equal(isOutOfRange(unitTemp, -1, { unit: "fridge" }, units), true);
+  // A unit with no limits falls back to the template's 5 C.
+  assert.equal(isOutOfRange(unitTemp, 6, { unit: "old" }, units), true);
+  assert.equal(limitText(unitTemp, { unit: "freezer" }, units), "between -25 and -15 °C");
+  assert.equal(limitText(unitTemp, {}, units), "Limit depends on the unit you pick");
+});
+
 test("parse turns form strings into typed values", () => {
   const fields: RecordField[] = [
     fridgeTemp,
