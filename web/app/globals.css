@@ -34,6 +34,10 @@
  */
 :root {
   color-scheme: light;
+  /* Height of the bottom navigation, including the phone's home-indicator
+     area. Fixed bars (like the checklist submit bar) sit on top of it with
+     bottom-(--nav-h), and pages pad by it so nothing hides underneath. */
+  --nav-h: calc(4rem + env(safe-area-inset-bottom));
 }
 
 @layer base {
