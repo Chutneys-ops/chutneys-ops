@@ -21,8 +21,12 @@ type RunSummary = {
   checklist_ticks: { item_id: string }[];
 };
 
-export default async function SitesPage() {
+export default async function SitesPage({ searchParams }: PageProps<"/sites">) {
   await connection();
+  // The Records tab sends you here with ?pick=records when you aren't on a
+  // site yet: the cards then go to each site's records instead.
+  const { pick } = await searchParams;
+  const pickingRecords = pick === "records";
   const supabase = await createClient();
 
   // Check who is logged in.
@@ -79,7 +83,9 @@ export default async function SitesPage() {
     <main className="mx-auto w-full max-w-md px-4 py-6">
       <p className="text-[13px] text-muted">{aucklandDay()}</p>
       <h1 className="mt-1 text-3xl font-bold">Sites</h1>
-      <p className="mt-4 text-[13px] font-semibold text-muted">Opening checklists</p>
+      <p className="mt-4 text-[13px] font-semibold text-muted">
+        {pickingRecords ? "Pick a site for food safety records" : "Opening checklists"}
+      </p>
 
       <ul className="mt-2.5 space-y-2.5">
         {sites.map((site) => {
@@ -92,7 +98,7 @@ export default async function SitesPage() {
           return (
             <li key={site.id}>
               <Link
-                href={`/sites/${site.id}`}
+                href={pickingRecords ? `/sites/${site.id}/records` : `/sites/${site.id}`}
                 className="flex min-h-16 items-center gap-3 rounded-[14px] border border-line bg-white px-4 py-3.5 text-ink hover:border-muted active:bg-primary-light"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -102,11 +108,13 @@ export default async function SitesPage() {
                 {/* The "Opening checklists" heading above already says which
                     checklist this is, so the pill shows just the status.
                     shrink-0 + nowrap keep it on one line; the name wraps instead. */}
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${toneClass[status.tone]}`}
-                >
-                  {status.text}
-                </span>
+                {!pickingRecords && (
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${toneClass[status.tone]}`}
+                  >
+                    {status.text}
+                  </span>
+                )}
                 <svg
                   aria-hidden="true"
                   className="h-[18px] w-[18px] shrink-0 text-muted"

@@ -74,5 +74,137 @@ insert into daily_sales (site_id, sale_date, channel, amount, source) values
   ('00000000-0000-0000-0000-000000000006', '2026-11-16', 'in_store', 760.00, 'manual')
 on conflict (site_id, sale_date, channel) do nothing;
 
--- Staff, shifts, readings and cash-ups need real auth users first.
--- Create test users in Supabase Auth, then add matching rows to staff and staff_sites.
+-- Test users, so local testing never depends on clicking in Studio.
+-- LOCAL TEST LOGINS ONLY: the password is public, never use these anywhere real.
+--   owner@test.local    owner    sees every site
+--   manager@test.local  manager  Truck - Sandringham, Orewa Cafe
+--   staff@test.local    staff    Truck - Sandringham
+-- Password for all three: password123
+--
+-- GoTrue (Supabase Auth) only lets a user log in when the auth.users row
+-- looks like one it created itself: the default instance_id, aud and role
+-- 'authenticated', a confirmed email, a bcrypt password, and empty strings
+-- (not NULL) in the token columns. Each user also needs an email identity.
+-- crypt() and gen_salt() come from pgcrypto, in the "extensions" schema.
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change, email_change_token_new,
+  email_change_token_current, phone_change, phone_change_token, reauthentication_token
+)
+select
+  '00000000-0000-0000-0000-000000000000', v.id, 'authenticated', 'authenticated', v.email,
+  extensions.crypt('password123', extensions.gen_salt('bf')), now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+  '', '', '', '', '', '', '', ''
+from (values
+  ('d0000000-0000-0000-0000-000000000001'::uuid, 'owner@test.local'),
+  ('d0000000-0000-0000-0000-000000000002'::uuid, 'manager@test.local'),
+  ('d0000000-0000-0000-0000-000000000003'::uuid, 'staff@test.local')
+) as v(id, email)
+on conflict do nothing;
+
+-- For the email provider, provider_id is the user's id as text.
+insert into auth.identities (id, user_id, provider_id, provider, identity_data, last_sign_in_at, created_at, updated_at)
+select
+  v.id, v.id, v.id::text, 'email',
+  jsonb_build_object('sub', v.id::text, 'email', v.email, 'email_verified', true),
+  now(), now(), now()
+from (values
+  ('d0000000-0000-0000-0000-000000000001'::uuid, 'owner@test.local'),
+  ('d0000000-0000-0000-0000-000000000002'::uuid, 'manager@test.local'),
+  ('d0000000-0000-0000-0000-000000000003'::uuid, 'staff@test.local')
+) as v(id, email)
+on conflict do nothing;
+
+insert into staff (id, name, role) values
+  ('d0000000-0000-0000-0000-000000000001', 'Test Owner', 'owner'),
+  ('d0000000-0000-0000-0000-000000000002', 'Test Manager', 'manager'),
+  ('d0000000-0000-0000-0000-000000000003', 'Test Staff', 'staff')
+on conflict (id) do nothing;
+
+-- The owner sees every site through is_owner(), so needs no links.
+insert into staff_sites (staff_id, site_id) values
+  ('d0000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003'), -- manager: Truck - Sandringham
+  ('d0000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000002'), -- manager: Orewa Cafe
+  ('d0000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000003')  -- staff: Truck - Sandringham
+on conflict do nothing;
+
+-- Food safety record templates. Drafts based on a typical NZ Food Control
+-- Plan: check them with the owner before relying on them.
+-- Safe to re-run: on conflict, the template is updated to match this file.
+-- Field types: text, number, time, date, select, yes_no, temp_unit.
+-- "later": true marks readings taken hours later, added as follow-up entries.
+insert into record_templates (code, title, description, period, sort_order, fields) values
+  ('fridge_daily', 'Fridge temperatures', 'Check every fridge and chiller. 5 C or below.', 'daily', 1, '[
+    {"key":"unit","label":"Fridge or chiller","type":"temp_unit","required":true},
+    {"key":"temperature","label":"Temperature","type":"number","required":true,"max":5,"unit":"C"}
+  ]'),
+  ('cooking', 'Cooking', 'Core temperature of cooked chicken and mince: 75 C or above.', 'daily', 2, '[
+    {"key":"dish","label":"Dish","type":"select","required":true,"options":["chicken","minced lamb","other"]},
+    {"key":"batch","label":"Batch or dish name","type":"text","required":true},
+    {"key":"core_temp","label":"Core temperature","type":"number","required":true,"min":75,"unit":"C"}
+  ]'),
+  ('cooling', 'Cooling', 'Cooked food: 21 C or below within 2 hours, 5 C or below within 6 hours.', 'daily', 3, '[
+    {"key":"dish","label":"Dish","type":"text","required":true},
+    {"key":"time_started","label":"Time cooling started","type":"time","required":true},
+    {"key":"temp_2h","label":"Temperature after 2 hours","type":"number","max":21,"unit":"C","later":true},
+    {"key":"temp_6h","label":"Temperature after 6 hours","type":"number","max":5,"unit":"C","later":true}
+  ]'),
+  ('reheating', 'Reheating', 'Reheat to 75 C or above.', 'daily', 4, '[
+    {"key":"dish","label":"Dish","type":"text","required":true},
+    {"key":"core_temp","label":"Core temperature","type":"number","required":true,"min":75,"unit":"C"}
+  ]'),
+  ('hot_holding', 'Hot holding', 'Bain-marie and hot hold: 60 C or above.', 'daily', 5, '[
+    {"key":"food","label":"Food","type":"text","required":true},
+    {"key":"temperature","label":"Temperature","type":"number","required":true,"min":60,"unit":"C"}
+  ]'),
+  ('cold_display', 'Cold display', 'Display cabinets: 5 C or below.', 'daily', 6, '[
+    {"key":"food","label":"Food","type":"text","required":true},
+    {"key":"temperature","label":"Temperature","type":"number","required":true,"max":5,"unit":"C"}
+  ]'),
+  ('transport', 'Transport', 'Food moved between sites. Chilled 5 C or below, hot 60 C or above on arrival.', 'daily', 7, '[
+    {"key":"food","label":"Food","type":"text","required":true},
+    {"key":"from_site","label":"From site","type":"text","required":true},
+    {"key":"mode","label":"Chilled or hot","type":"select","required":true,"options":["chilled","hot"]},
+    {"key":"temp_leaving","label":"Temperature leaving","type":"number","required":true,"unit":"C"},
+    {"key":"temp_arriving","label":"Temperature arriving","type":"number","required":true,"unit":"C",
+     "range_when":{"field":"mode","ranges":{"chilled":{"max":5},"hot":{"min":60}}}}
+  ]'),
+  ('batter_fermentation', 'Dosa and idli batter', 'Fermentation from mixing to the fridge.', 'daily', 8, '[
+    {"key":"batch","label":"Batch","type":"text","required":true},
+    {"key":"time_made","label":"Time made","type":"time","required":true},
+    {"key":"room_temp","label":"Room temperature","type":"number","unit":"C"},
+    {"key":"time_ready","label":"Time ready","type":"time","later":true},
+    {"key":"how_checked","label":"How checked","type":"select","options":["smell and bubbles","pH","other"],"later":true},
+    {"key":"time_into_fridge","label":"Time into fridge","type":"time","later":true},
+    {"key":"use_by","label":"Use by date","type":"date","later":true}
+  ]'),
+  ('cleaning', 'Cleaning', 'Cleaning tasks done today.', 'daily', 9, '[
+    {"key":"area","label":"Area","type":"text","required":true},
+    {"key":"task_done","label":"Task done","type":"yes_no","required":true}
+  ]'),
+  ('deliveries', 'Deliveries', 'Chilled deliveries: 5 C or below. Leave the temperature blank for dry goods.', 'event', 10, '[
+    {"key":"supplier","label":"Supplier","type":"text","required":true},
+    {"key":"food","label":"Food","type":"text","required":true},
+    {"key":"quantity","label":"Quantity","type":"text","required":true},
+    {"key":"arrival_temp","label":"Arrival temperature","type":"number","max":5,"unit":"C"}
+  ]'),
+  ('maintenance', 'Maintenance', 'Repairs and servicing.', 'event', 11, '[
+    {"key":"equipment","label":"Equipment","type":"text","required":true},
+    {"key":"what_done","label":"What was done","type":"text","required":true}
+  ]'),
+  ('incident', 'Incident', 'Anything that went wrong with food safety.', 'event', 12, '[
+    {"key":"what_happened","label":"What happened","type":"text","required":true},
+    {"key":"what_done","label":"What was done","type":"text","required":true}
+  ]'),
+  ('complaint', 'Customer complaint', 'Complaints about food.', 'event', 13, '[
+    {"key":"complaint","label":"Customer complaint","type":"text","required":true},
+    {"key":"what_done","label":"What was done","type":"text","required":true}
+  ]')
+on conflict (code) do update set
+  title = excluded.title,
+  description = excluded.description,
+  period = excluded.period,
+  sort_order = excluded.sort_order,
+  fields = excluded.fields;

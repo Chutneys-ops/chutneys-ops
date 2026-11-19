@@ -11,8 +11,15 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
 - **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request.
 - **Sites list** (`/sites`): your sites with today's opening checklist status (not started, in progress, done).
 - **Opening checklist** (`/sites/[siteId]`): tick items, see who ticked what and when, submit once everything is ticked. Has loading and error screens.
+- **Food safety records** (`/sites/[siteId]/records`, third migration): 13 record types from templates in the database (fridge temperatures, cooking, cooling, reheating, hot holding, cold display, transport, batter fermentation, cleaning, deliveries, maintenance, incidents, complaints).
+  - Entries can never be edited or deleted. Mistakes are fixed with a correction entry and a note.
+  - A database trigger checks every value against its template. Out-of-range readings are flagged and need a corrective action.
+  - Cooling and batter readings taken hours later are added as follow-up entries.
+  - A manager or owner signs off each day's sheet with a 4-digit PIN, set in `/settings` and stored only as a hash.
+- **Bottom navigation**: Sites, Records, Time and Purchases (the last two are "Coming soon").
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, an app header, and restyled login, sites, checklist, loading and error screens. Light theme only for now.
-- **Tests**: unit tests for NZ dates and checklist status (`web/lib/*.test.ts`), pgTAP tests for the checklist RLS rules (`supabase/tests/`).
+- **Tests**: unit tests for NZ dates, checklist status and record validation (`web/lib/*.test.ts`), pgTAP tests for the checklist and food safety records rules (`supabase/tests/`).
+- **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase, and a production build.
 
 ## Daily start
@@ -21,15 +28,29 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 
 1. `git switch main` then `git pull`, then make a branch for today's work: `git switch -c my-branch`.
 2. `npx supabase start` - starts the local database, auth and API in Docker. Prints the URLs and keys.
-3. If a migration or `seed.sql` changed since last time: `npx supabase db reset`. This rebuilds the local database from scratch, so it also wipes your local test users (see Known follow-ups).
-4. Check `web/.env.local` has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (copy them from `npx supabase status`).
-5. `cd web` then `npm run dev`, and open http://localhost:3000. Studio (the database UI) is at http://localhost:54323.
-6. Before pushing: `npm test` and `npm run lint` in `web/`, and `npx supabase test db` in the root.
-7. End of day: `npx supabase stop`.
+3. If a migration changed since last time: `npx supabase migration up`. It applies only the new migrations and keeps your data.
+4. If `seed.sql` changed, re-run it in PowerShell:
+
+   ```powershell
+   Get-Content supabase/seed.sql -Raw | docker exec -i supabase_db_chutneys-ops psql -U postgres -d postgres
+   ```
+
+   The seed is safe to re-run: rows that already exist are skipped or updated. Don't use `npx supabase db reset`; it wipes everything you've tested with.
+5. Log in with one of the seeded test users. The password for all three is `password123`, and they are for local testing only.
+
+   | Login | Role | Sites |
+   |---|---|---|
+   | `owner@test.local` | owner | every site |
+   | `manager@test.local` | manager | Truck - Sandringham, Orewa Cafe |
+   | `staff@test.local` | staff | Truck - Sandringham |
+
+6. Check `web/.env.local` has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (copy them from `npx supabase status`).
+7. `cd web` then `npm run dev`, and open http://localhost:3000. Studio (the database UI) is at http://localhost:54323.
+8. Before pushing: `npm test` and `npm run lint` in `web/`, and `npx supabase test db` in the root.
+9. End of day: `npx supabase stop`.
 
 ## Known follow-ups
 
-- **Test users are not in the seed.** After every `db reset` you have to recreate users in Auth and add their `staff` and `staff_sites` rows by hand. Add them to `seed.sql` instead.
 - **`supabase/snippets/` is committed.** These are Studio scratch queries, and one changes site names and inserts a site. That data is already in `seed.sql`, so delete the folder and git-ignore it, so schema and data changes only happen through migrations and the seed.
 - **`web/README.md` is still the create-next-app boilerplate.** Replace it or point it to this README.
 - **Root `package.json`** still has the placeholder `test` script and `main` field from `npm init`.
@@ -41,6 +62,13 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - **Labels:** use "5°C" instead of "5 C".
 - **Database types:** generate them with `supabase gen types` to replace the `as` casts in page code.
 - **Saving state:** show "saving..." on checklist rows while a tick is being saved (`useFormStatus`).
+- **Food safety records:**
+  - **PIN lockout:** lock sign-off for a while after several wrong PINs. A raised error rolls back any attempt counter in the same call, so the counter needs a different design, for example returning a result instead of raising.
+  - **Browse past days:** the records pages only show today (plus yesterday's unfinished cooling and batter records).
+  - **Export for the inspector:** a printable or PDF view of a date range for MPI or council verification.
+  - **Per-unit min/max:** check fridge readings against each unit's own `min_c`/`max_c` in `temp_units`, not only the template's limit.
+  - **Photos:** attach a photo to an entry (for example a probe reading or a delivery label).
+  - **Confirm templates with the owner:** the 13 record templates in `seed.sql` are drafts based on a typical Food Control Plan.
 
 ## The idea
 
@@ -115,8 +143,8 @@ Owner answers (fill in after the meeting):
 
 - `CLAUDE.md` - project context for Claude Code
 - `supabase/migrations/` - database tables, RLS policies and functions, applied in date order
-- `supabase/seed.sql` - sample data matching the concept demo
-- `supabase/tests/` - pgTAP tests for the RLS rules
+- `supabase/seed.sql` - sample data matching the concept demo, record templates and local test users
+- `supabase/tests/` - pgTAP tests for the RLS rules and food safety records
 - `web/` - the Next.js app
 - `.github/workflows/ci.yml` - CI checks on pull requests
 - `.gitattributes` - keeps line endings as LF for everyone

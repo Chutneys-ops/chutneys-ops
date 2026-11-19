@@ -40,3 +40,11 @@ export function aucklandTime(value: string | Date): string {
 export function aucklandDay(now: Date = new Date()): string {
   return dayFormat.format(now);
 }
+
+/** The day before a "YYYY-MM-DD" date. Works on the date itself, so
+ *  daylight-saving changes can't make it skip or repeat a day. */
+export function previousDate(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}

@@ -135,9 +135,9 @@ export default async function SiteChecklistPage({ params }: PageProps<"/sites/[s
         </ul>
       )}
 
-      {/* Submit bar. The bottom padding grows on phones with a home-indicator
-          bar (env(safe-area-inset-bottom)) so the button isn't hidden. */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-cream px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      {/* Submit bar. It sits just above the bottom tab bar (bottom-(--nav-h));
+          the tab bar already leaves room for the phone's home indicator. */}
+      <div className="fixed inset-x-0 bottom-(--nav-h) z-10 border-t border-line bg-cream px-4 py-3">
         <div className="mx-auto max-w-md">
           {locked && run?.submitted_at ? (
             <p
