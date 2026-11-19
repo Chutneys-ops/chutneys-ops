@@ -21,7 +21,6 @@ type DbError = { code?: string; message: string };
 const READABLE_CODES = new Set(["23514", "42501", "22023"]);
 
 function dbMessage(error: DbError, fallback: string): string {
-  if (error.code === "28P01") return "Wrong PIN. Try again.";
   if (error.code && READABLE_CODES.has(error.code)) return error.message;
   return `${fallback}: ${error.message}`;
 }
@@ -199,8 +198,23 @@ export async function signOff(sheetId: string, prev: FormState, formData: FormDa
 
   // sign_off_sheet checks you're a manager or owner and the PIN, then stamps
   // signed_off_by and signed_off_at itself.
-  const { error } = await supabase.rpc("sign_off_sheet", { sheet_id: sheetId, pin });
+  //
+  // A wrong PIN or a lock is NOT an error: the function returns a status, so
+  // the attempt it counted is saved (an error would roll the count back).
+  // Real errors (not a manager, no PIN set, nothing to sign) still arrive in
+  // `error`.
+  const { data, error } = await supabase.rpc("sign_off_sheet", { sheet_id: sheetId, pin });
   if (error) return fail(dbMessage(error, "Could not sign off"));
+
+  const result = data as { status: string; attempts_left?: number; minutes?: number };
+  if (result.status === "wrong_pin") {
+    const left = result.attempts_left ?? 0;
+    return fail(`Wrong PIN. ${left} ${left === 1 ? "try" : "tries"} left before sign-off locks for 15 minutes.`);
+  }
+  if (result.status === "locked") {
+    const minutes = result.minutes ?? 15;
+    return fail(`Too many wrong PINs. Try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`);
+  }
 
   refresh();
   return { seq, ok: true, message: "Signed off" };

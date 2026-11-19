@@ -12,7 +12,8 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Staff see and add records only at the site they're clocked in at.
   - Managers and the owner see records at every site and can sign off anywhere. They need to be clocked in to add entries.
   - Money (cash-ups, daily sales) is owner only; managers can't see it.
-  - Managers fix a forgotten clock-out with `fix_clock_out`, which needs a note and records who did it.
+  - Forgotten clock-outs (fifth migration): a shift open for more than 14 hours no longer counts as being on shift. The next clock-in closes it with zero hours and `needs_review`, and staff see "Your last shift at X was never clocked out".
+  - Managers fix it on `/time` under "Needs fixing": pick the real clock-out in Auckland time and add a required note. `fix_clock_out` records who fixed it and clears `needs_review`.
   - `staff_sites` is no longer used for access. It's kept for now as history.
 - **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. `/` goes to `/start`.
 - **Site picker** (`/start`): "Where are you working today?" with a big card per site. Tapping one clocks you in and opens Records. The header shows "Working at …" with Change site and Clock out.
@@ -26,9 +27,9 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Entries can never be edited or deleted. Mistakes are fixed with a correction entry, and every entry can have Comments.
   - A database trigger checks every value against its template. Out-of-range readings, or a "No" on a check that should be "Yes", are flagged and need a corrective action.
   - Cooling and batter readings taken hours later are added as follow-up entries.
-  - A manager or owner signs off each day's sheet with a 4-digit PIN, set under More and stored only as a hash.
+  - A manager or owner signs off each day's sheet with a 4-digit PIN, set under More and stored only as a hash. Five wrong PINs lock sign-off for 15 minutes.
 - **Opening checks**: the old opening checklist is now a record template per kind of site (`opening_checks_truck`, `_cafe`, `_restaurant`). The checklist pages are gone; the old checklist tables are still in the database.
-- **Time** (`/time`): your current shift ("On shift at Orewa Cafe since 9:02 am") and this week's shifts with total hours.
+- **Time** (`/time`): your current shift ("On shift at Orewa Cafe since 9:02 am") and this week's shifts with total hours. Missing clock-outs show as "your manager will fix it" and count zero hours. Managers and the owner also see the "Needs fixing" list.
 - **Bottom navigation**: Records, Time, Purchases ("Coming soon") and More (PIN and sign out).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests for NZ dates, record validation and shift hours (`web/lib/*.test.ts`), pgTAP tests for checklist, records and shift-access rules (`supabase/tests/`).
@@ -75,10 +76,13 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - **Labels:** use "5°C" instead of "5 C".
 - **Database types:** generate them with `supabase gen types` to replace the `as` casts in page code.
 - **Old checklist tables and `staff_sites`:** no longer used by the app. Drop them in a later migration once nothing needs their history.
-- **Fix clock-out screen:** `fix_clock_out` exists in the database (manager, required note), but there is no page for it yet. Add one to `/time` for managers.
+- ~~**Fix clock-out screen.**~~ Done: "Needs fixing" on `/time` for managers and the owner.
+- **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. Change both together, or move the number into a settings table.
+- **Night shifts longer than 14 hours** would be treated as forgotten. Fine for now; revisit if a site ever runs one.
 - **Shift reports for payroll:** hours per person per week across all sites, for managers and the owner.
 - **Food safety records:**
-  - **PIN lockout:** lock sign-off for a while after several wrong PINs. A raised error rolls back any attempt counter in the same call, so the counter needs a different design, for example returning a result instead of raising.
+  - ~~**PIN lockout.**~~ Done: 5 wrong PINs lock sign-off for 15 minutes. `sign_off_sheet` returns a status (`ok`, `wrong_pin`, `locked`) instead of raising for a wrong PIN, because a raised exception would roll back the saved attempt count.
+  - **Unlock early:** an owner can't clear a manager's lock yet; they wait 15 minutes or set a new PIN. Add an owner-only unlock if that's too slow in practice.
   - **Browse past days:** managers and the owner can pick a date on `/records`. Staff only see today (plus yesterday's unfinished cooling and batter records). A history view for staff could come later.
   - **Export for the inspector:** a printable or PDF view of a date range for MPI or council verification.
   - **Per-unit min/max:** check fridge readings against each unit's own `min_c`/`max_c` in `temp_units`, not only the template's limit.

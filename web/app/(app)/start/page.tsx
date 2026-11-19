@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { NotStaff } from "@/components/not-staff";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentShift, getSession, isManager, kindLabel } from "@/lib/supabase/session";
+import { ForgottenShiftNotice } from "@/components/forgotten-shift-notice";
+import { getCurrentShift, getForgottenShift, getSession, isManager, kindLabel } from "@/lib/supabase/session";
 import { startShift } from "../shift-actions";
 
 // "Where are you working today?" Picking a site clocks you in there.
@@ -17,7 +18,10 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
   if (!me) return <NotStaff />;
 
   const { change } = await searchParams;
-  const shift = await getCurrentShift(supabase, userId);
+  const [shift, forgotten] = await Promise.all([
+    getCurrentShift(supabase, userId),
+    getForgottenShift(supabase, userId),
+  ]);
   if (shift && change !== "1") redirect("/records");
 
   // RLS lets every signed-in person read active sites (for this picker).
@@ -38,6 +42,7 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
           ? `You're on shift at ${shift.site.name}. Picking another site clocks you out there and in here.`
           : "Picking a site clocks you in there."}
       </p>
+      {forgotten && <ForgottenShiftNotice siteName={forgotten.siteName} clockIn={forgotten.clock_in} />}
 
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-red-800">
