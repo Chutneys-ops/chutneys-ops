@@ -123,7 +123,9 @@ insert into staff (id, name, role) values
   ('d0000000-0000-0000-0000-000000000003', 'Test Staff', 'staff')
 on conflict (id) do nothing;
 
--- The owner sees every site through is_owner(), so needs no links.
+-- staff_sites no longer controls access (an open shift does: log in, pick a
+-- site, and you're clocked in there). These links are kept as history of
+-- where each person usually works. Managers and the owner see every site.
 insert into staff_sites (staff_id, site_id) values
   ('d0000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003'), -- manager: Truck - Sandringham
   ('d0000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000002'), -- manager: Orewa Cafe
@@ -182,7 +184,7 @@ insert into record_templates (code, title, description, period, sort_order, fiel
   ]'),
   ('cleaning', 'Cleaning', 'Cleaning tasks done today.', 'daily', 9, '[
     {"key":"area","label":"Area","type":"text","required":true},
-    {"key":"task_done","label":"Task done","type":"yes_no","required":true}
+    {"key":"task_done","label":"Task done","type":"yes_no","required":true,"expect":true}
   ]'),
   ('deliveries', 'Deliveries', 'Chilled deliveries: 5 C or below. Leave the temperature blank for dry goods.', 'event', 10, '[
     {"key":"supplier","label":"Supplier","type":"text","required":true},
@@ -206,5 +208,53 @@ on conflict (code) do update set
   title = excluded.title,
   description = excluded.description,
   period = excluded.period,
+  sort_order = excluded.sort_order,
+  fields = excluded.fields;
+
+-- Opening checks, as record templates (they replace the old checklist pages).
+-- One template per kind of site, because each kind has different checks and
+-- the record engine picks templates by site kind. One entry = the whole
+-- morning check. "expect": true means a No is flagged and needs a corrective
+-- action, like a fridge reading over 5 C. Drafts: confirm with the owner.
+insert into record_templates (code, title, description, period, site_kinds, sort_order, fields) values
+  ('opening_checks_truck', 'Opening checks', 'Before opening: answer every check. A No needs a corrective action.', 'daily', '{truck}', 0, '[
+    {"key":"gas_bottles","label":"Gas bottles checked and secured","type":"yes_no","required":true,"expect":true},
+    {"key":"generator","label":"Generator fuel and power OK","type":"yes_no","required":true,"expect":true},
+    {"key":"handwash","label":"Handwash station set up with soap and paper towels","type":"yes_no","required":true,"expect":true},
+    {"key":"fridges","label":"Fridges at 5 C or below","type":"yes_no","required":true,"expect":true},
+    {"key":"sanitiser","label":"Surface sanitiser made up","type":"yes_no","required":true,"expect":true},
+    {"key":"labelled","label":"Prep containers labelled and dated","type":"yes_no","required":true,"expect":true},
+    {"key":"eftpos","label":"EFTPOS terminal charged and online","type":"yes_no","required":true,"expect":true},
+    {"key":"float","label":"Float counted ($200)","type":"yes_no","required":true,"expect":true}
+  ]'),
+  ('opening_checks_restaurant', 'Opening checks', 'Before opening: answer every check. A No needs a corrective action.', 'daily', '{restaurant}', 0, '[
+    {"key":"handwash","label":"Handwash stations stocked with soap and paper towels","type":"yes_no","required":true,"expect":true},
+    {"key":"chillers","label":"Walk-in chiller and fridges at 5 C or below","type":"yes_no","required":true,"expect":true},
+    {"key":"freezers","label":"Freezers running and food frozen hard","type":"yes_no","required":true,"expect":true},
+    {"key":"sanitiser","label":"Surface sanitiser made up","type":"yes_no","required":true,"expect":true},
+    {"key":"labelled","label":"Prep and stored food labelled, dated and rotated","type":"yes_no","required":true,"expect":true},
+    {"key":"equipment","label":"Tawa, ovens and fryers on and checked","type":"yes_no","required":true,"expect":true},
+    {"key":"fryer_oil","label":"Fryer oil checked (colour and level)","type":"yes_no","required":true,"expect":true},
+    {"key":"front_clean","label":"Dining room, tables and toilets clean","type":"yes_no","required":true,"expect":true},
+    {"key":"allergens","label":"Allergen information up to date","type":"yes_no","required":true,"expect":true},
+    {"key":"delivery_tablets","label":"Delivery tablets on and accepting orders","type":"yes_no","required":true,"expect":true},
+    {"key":"till","label":"Till, EFTPOS and float ready","type":"yes_no","required":true,"expect":true}
+  ]'),
+  ('opening_checks_cafe', 'Opening checks', 'Before opening: answer every check. A No needs a corrective action.', 'daily', '{cafe}', 0, '[
+    {"key":"handwash","label":"Handwash station stocked with soap and paper towels","type":"yes_no","required":true,"expect":true},
+    {"key":"fridges","label":"Fridges and display cabinet at 5 C or below","type":"yes_no","required":true,"expect":true},
+    {"key":"coffee_machine","label":"Coffee machine on, purged and test shot pulled","type":"yes_no","required":true,"expect":true},
+    {"key":"milk","label":"Milk checked: use-by dates OK and stock rotated","type":"yes_no","required":true,"expect":true},
+    {"key":"sanitiser","label":"Surface sanitiser made up","type":"yes_no","required":true,"expect":true},
+    {"key":"labelled","label":"Cabinet food labelled and dated","type":"yes_no","required":true,"expect":true},
+    {"key":"front_clean","label":"Tables, counter and toilet clean","type":"yes_no","required":true,"expect":true},
+    {"key":"delivery_tablet","label":"Delivery tablet on and accepting orders","type":"yes_no","required":true,"expect":true},
+    {"key":"till","label":"Till, EFTPOS and float ready","type":"yes_no","required":true,"expect":true}
+  ]')
+on conflict (code) do update set
+  title = excluded.title,
+  description = excluded.description,
+  period = excluded.period,
+  site_kinds = excluded.site_kinds,
   sort_order = excluded.sort_order,
   fields = excluded.fields;

@@ -7,7 +7,7 @@ create extension if not exists pgtap with schema extensions;
 select plan(15);
 
 -- Setup (as the postgres superuser, which skips RLS) ------------------------
--- Two staff members: Ana works on test truck A, Ben on test truck B.
+-- Two staff members: Ana is on shift at test truck A, Ben at test truck B.
 insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-00000000000a', 'ana@test.local'),
   ('b0000000-0000-0000-0000-00000000000b', 'ben@test.local');
@@ -17,9 +17,10 @@ insert into staff (id, name, role) values
 insert into sites (id, name, kind) values
   ('10000000-0000-0000-0000-00000000000a', 'Test truck A', 'truck'),
   ('10000000-0000-0000-0000-00000000000b', 'Test truck B', 'truck');
-insert into staff_sites (staff_id, site_id) values
-  ('a0000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a'),
-  ('b0000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-00000000000b');
+-- Access comes from open shifts now, not staff_sites.
+insert into shifts (site_id, staff_id) values
+  ('10000000-0000-0000-0000-00000000000a', 'a0000000-0000-0000-0000-00000000000a'),
+  ('10000000-0000-0000-0000-00000000000b', 'b0000000-0000-0000-0000-00000000000b');
 insert into checklist_items (id, site_kind, checklist, label) values
   ('20000000-0000-0000-0000-000000000001', 'truck', 'opening', 'Test truck item'),
   ('20000000-0000-0000-0000-000000000002', 'cafe', 'opening', 'Test cafe item');
@@ -122,7 +123,7 @@ select is_empty(
 
 select is_empty(
   $$ select 1 from staff where id = 'a0000000-0000-0000-0000-00000000000a' $$,
-  'Ben cannot see Ana''s name (they share no site)');
+  'Ben cannot see Ana''s name (no shift at the same site)');
 
 select * from finish();
 rollback;
