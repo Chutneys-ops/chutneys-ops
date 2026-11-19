@@ -56,6 +56,33 @@ where not exists (
   select 1 from temp_units t where t.site_id = v.site_id and t.name = v.name
 );
 
+-- Fridges and freezers at every site, with fixed ids so a re-run skips them.
+-- Id pattern: 7e000000-0000-0000-0000-0000000000SU (S = site 1-7, U = unit).
+-- Each unit's own limits drive the fridge_daily check: fridges 0 to 5 C,
+-- freezers -25 to -15 C.
+insert into temp_units (id, site_id, name, min_c, max_c) values
+  -- Restaurant
+  ('7e000000-0000-0000-0000-000000000011', '00000000-0000-0000-0000-000000000001', 'Walk-in chiller', 0, 5),
+  ('7e000000-0000-0000-0000-000000000012', '00000000-0000-0000-0000-000000000001', 'Prep fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000013', '00000000-0000-0000-0000-000000000001', 'Walk-in freezer', -25, -15),
+  -- Cafes
+  ('7e000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000002', 'Display chiller', 0, 5),
+  ('7e000000-0000-0000-0000-000000000022', '00000000-0000-0000-0000-000000000002', 'Back fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000023', '00000000-0000-0000-0000-000000000002', 'Freezer', -25, -15),
+  ('7e000000-0000-0000-0000-000000000071', '00000000-0000-0000-0000-000000000007', 'Display chiller', 0, 5),
+  ('7e000000-0000-0000-0000-000000000072', '00000000-0000-0000-0000-000000000007', 'Back fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000073', '00000000-0000-0000-0000-000000000007', 'Freezer', -25, -15),
+  -- Trucks
+  ('7e000000-0000-0000-0000-000000000031', '00000000-0000-0000-0000-000000000003', 'Under-counter fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000032', '00000000-0000-0000-0000-000000000003', 'Freezer', -25, -15),
+  ('7e000000-0000-0000-0000-000000000041', '00000000-0000-0000-0000-000000000004', 'Under-counter fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000042', '00000000-0000-0000-0000-000000000004', 'Freezer', -25, -15),
+  ('7e000000-0000-0000-0000-000000000051', '00000000-0000-0000-0000-000000000005', 'Under-counter fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000052', '00000000-0000-0000-0000-000000000005', 'Freezer', -25, -15),
+  ('7e000000-0000-0000-0000-000000000061', '00000000-0000-0000-0000-000000000006', 'Under-counter fridge', 0, 5),
+  ('7e000000-0000-0000-0000-000000000062', '00000000-0000-0000-0000-000000000006', 'Freezer', -25, -15)
+on conflict (id) do nothing;
+
 -- Daily sales total 9,770: in store 5,890, Uber Eats 1,920, DoorDash 1,140, website 820
 insert into daily_sales (site_id, sale_date, channel, amount, source) values
   ('00000000-0000-0000-0000-000000000001', '2026-11-16', 'in_store', 1520.00, 'manual'),
@@ -136,11 +163,13 @@ on conflict do nothing;
 -- Plan: check them with the owner before relying on them.
 -- Safe to re-run: on conflict, the template is updated to match this file.
 -- Field types: text, number, time, date, select, yes_no, temp_unit.
+-- "range_from": "unit" on a number uses the chosen unit's min_c/max_c
+-- (template min/max only fill in where the unit has none).
 -- "later": true marks readings taken hours later, added as follow-up entries.
 insert into record_templates (code, title, description, period, sort_order, fields) values
-  ('fridge_daily', 'Fridge temperatures', 'Check every fridge and chiller. 5 C or below.', 'daily', 1, '[
-    {"key":"unit","label":"Fridge or chiller","type":"temp_unit","required":true},
-    {"key":"temperature","label":"Temperature","type":"number","required":true,"max":5,"unit":"C"}
+  ('fridge_daily', 'Fridge temperatures', 'Check every fridge, chiller and freezer. Fridges 5 C or below, freezers -15 C or below.', 'daily', 1, '[
+    {"key":"unit","label":"Fridge, chiller or freezer","type":"temp_unit","required":true},
+    {"key":"temperature","label":"Temperature","type":"number","required":true,"max":5,"unit":"C","range_from":"unit"}
   ]'),
   ('cooking', 'Cooking', 'Core temperature of cooked chicken and mince: 75 C or above.', 'daily', 2, '[
     {"key":"dish","label":"Dish","type":"select","required":true,"options":["chicken","minced lamb","other"]},

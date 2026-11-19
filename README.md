@@ -29,12 +29,23 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Cooling and batter readings taken hours later are added as follow-up entries.
   - A manager or owner signs off each day's sheet with a 4-digit PIN, set under More and stored only as a hash. Five wrong PINs lock sign-off for 15 minutes.
 - **Opening checks**: the old opening checklist is now a record template per kind of site (`opening_checks_truck`, `_cafe`, `_restaurant`). The checklist pages are gone; the old checklist tables are still in the database.
+- **Purchases** (`/purchases`, seventh migration): groceries and supplies bought for a site, with the invoice for GST.
+  - Add a purchase where you're clocked in: supplier, what was bought, total incl GST, GST included yes/no, how it was paid (company card, till cash, own money) and comments.
+  - The database works out the GST (`round(total * 3 / 23, 2)`, or 0 when the supplier isn't GST registered), so nobody can type it wrong.
+  - Every purchase needs an invoice (photo or PDF) or a "no receipt" reason. A check constraint enforces it.
+  - "Take photo" opens the camera; "Choose file" takes a photo or PDF (two buttons because Android hides the file picker when the camera option is set). Photos are shrunk in the browser to 1600 px wide JPEG (about 200-400 KB) before uploading, which also strips GPS data.
+  - Invoices live in a private Storage bucket, `invoices` (5 MB, images and PDF), at `{site_id}/{yyyy}/{mm}/{uuid}.{ext}`. Storage policies: upload only into the folder of the site you're on shift at; read your own uploads; managers and the owner read all. A purchase can only point at your own file in that site's folder. Files are shown with short-lived signed URLs through `/purchases/invoice/<id>`.
+  - The file is uploaded first, then the purchase is saved. If saving fails, the file is deleted (allowed only for your own file that no purchase uses).
+  - Nobody can edit or delete a purchase. Staff see their own; managers and the owner see all, with site and month filters.
+  - "Owed to staff": own-money purchases not yet paid back. A manager or the owner taps "Mark paid back" (`mark_reimbursed`). You can't mark your own, except the owner.
+  - The owner gets "Export month": a CSV for the accountant (date, site, supplier, description, total, GST, payment method, who bought, invoice link, no-receipt reason). The route checks the role on the server, so anyone else gets 403.
+- **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Time** (`/time`): your current shift ("On shift at Orewa Cafe since 9:02 am") and this week's shifts with total hours. Missing clock-outs show as "your manager will fix it" and count zero hours. Managers and the owner also see the "Needs fixing" list.
-- **Bottom navigation**: Records, Time, Purchases ("Coming soon") and More (PIN and sign out).
+- **Bottom navigation**: Records, Time, Purchases and More (PIN and sign out).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
-- **Tests**: unit tests for NZ dates, record validation and shift hours (`web/lib/*.test.ts`), pgTAP tests for checklist, records and shift-access rules (`supabase/tests/`).
+- **Tests**: unit tests for NZ dates, record validation, shift hours and purchases (GST maths, CSV, file checks) in `web/lib/*.test.ts`; pgTAP tests for checklist, records, shift-access, temperature-limit, purchase and invoice-storage rules (`supabase/tests/`).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
-- **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase, and a production build.
+- **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
 ## Daily start
 
@@ -43,6 +54,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 1. `git switch main` then `git pull`, then make a branch for today's work: `git switch -c my-branch`.
 2. `npx supabase start` - starts the local database, auth and API in Docker. Prints the URLs and keys.
 3. If a migration changed since last time: `npx supabase migration up`. It applies only the new migrations and keeps your data.
+   If `supabase/config.toml` changed (for example a new Storage bucket): `npx supabase stop`, then `npx supabase start`, then `npx supabase seed buckets` to create the buckets. None of these wipe your data.
 4. If `seed.sql` changed, re-run it in PowerShell:
 
    ```powershell
@@ -79,13 +91,18 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - ~~**Fix clock-out screen.**~~ Done: "Needs fixing" on `/time` for managers and the owner.
 - **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. Change both together, or move the number into a settings table.
 - **Night shifts longer than 14 hours** would be treated as forgotten. Fine for now; revisit if a site ever runs one.
+- **Purchases:**
+  - **Orphaned invoice files:** if the browser closes between uploading the file and saving the purchase, the file stays in Storage with no purchase. Clean these up with a scheduled job later (files older than a day that no purchase points at).
+  - **Hosted bucket:** `config.toml` only creates the `invoices` bucket locally. Before go-live, run `npx supabase seed buckets --remote` (or create it in the dashboard with the same settings).
+  - **HEIC photos:** "Choose file" with an iPhone HEIC photo only works in Safari (other browsers can't open HEIC to shrink it). The camera button always gives a JPEG.
+  - **Xero:** push purchases as bills instead of the CSV once the Xero connection exists.
 - **Shift reports for payroll:** hours per person per week across all sites, for managers and the owner.
 - **Food safety records:**
   - ~~**PIN lockout.**~~ Done: 5 wrong PINs lock sign-off for 15 minutes. `sign_off_sheet` returns a status (`ok`, `wrong_pin`, `locked`) instead of raising for a wrong PIN, because a raised exception would roll back the saved attempt count.
   - **Unlock early:** an owner can't clear a manager's lock yet; they wait 15 minutes or set a new PIN. Add an owner-only unlock if that's too slow in practice.
   - **Browse past days:** managers and the owner can pick a date on `/records`. Staff only see today (plus yesterday's unfinished cooling and batter records). A history view for staff could come later.
   - **Export for the inspector:** a printable or PDF view of a date range for MPI or council verification.
-  - **Per-unit min/max:** check fridge readings against each unit's own `min_c`/`max_c` in `temp_units`, not only the template's limit.
+  - ~~**Per-unit min/max.**~~ Done: `"range_from": "unit"` on a number field uses the chosen unit's own limits.
   - **Photos:** attach a photo to an entry (for example a probe reading or a delivery label).
   - **Confirm templates with the owner:** the 13 record templates in `seed.sql` are drafts based on a typical Food Control Plan.
 
@@ -93,6 +110,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 
 - **Home screen:** a proper home screen with Chutneys branding later. For now `/` goes straight to the site picker.
 - **Money pages are owner only:** cash-ups, daily sales and anything else with money in it. The database already enforces this (`is_owner()` on `cash_ups` and `daily_sales`), so managers can't see it even through the API.
+  - Exception: **purchases**. Managers see all purchases, because they approve staff spending and pay people back. The monthly export is still owner only.
 - **Mobile first:** big tap targets (48px or more), the bottom tab bar for the main sections, and the current site always visible at the top.
 
 ## The idea
