@@ -74,7 +74,9 @@ export default async function TrainingPage() {
       ? supabase.from("training_records").select(SELECT).order("trainer_signed_at", { ascending: false }).limit(30)
       : Promise.resolve({ data: [], error: null }),
     manager
-      ? supabase.from("staff").select("id, name").neq("id", userId).order("name")
+      ? // Trainee picker: turned-off people (leavers) are hidden. Their past
+      // training still shows in the lists, through the joins.
+      supabase.from("staff").select("id, name").eq("active", true).neq("id", userId).order("name")
       : Promise.resolve({ data: [], error: null }),
   ]);
   const error = mineResult.error ?? allResult.error ?? staffResult.error;

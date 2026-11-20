@@ -14,7 +14,28 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Money (cash-ups, daily sales) is owner only; managers can't see it.
   - Old clock-in/clock-out rows (and `fix_clock_out`, `needs_review`) stay in the database for history. The app no longer shows Clock out, forgotten-shift notices or the "Needs fixing" list.
   - `staff_sites` is no longer used for access. It's kept for now as history.
-- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. Signing in always lands on Home (never a "next" or last-visited page). `/` redirects to `/home`, and refreshing a page stays on it.
+- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. Signing in always lands on Home (never a "next" or last-visited page). `/` redirects to `/home`, and refreshing a page stays on it. Wrong details always say "Email or password is incorrect", including for turned-off accounts, so the form never reveals who has an account.
+- **Staff accounts** (thirteenth migration, owner only at More > Staff):
+  - **No public sign-up** (`enable_signup = false`). The owner invites people (name, email, role). They get an email with a link and choose their own password.
+  - **Invite**: a server action checks with the caller's *own* session that they are an active owner. Only then does it use the admin client (`web/lib/supabase/admin.ts`, `SUPABASE_SECRET_KEY`) to call `auth.admin.inviteUserByEmail`. It then adds the `staff` row with the owner's session (an owner-only insert policy).
+  - **Statuses:** Active; Invited, not joined yet (no password set; `staff_logins()`); Turned off. Resend invite sends a new link. If they opened the first link but never saved a password, it sends a "choose a password" link instead.
+  - **Roles and turning off** go only through `set_staff_role` and `set_staff_active`. Both are owner only, and neither works on yourself, so there is always an owner. Turning someone off:
+    - deletes their sessions (signed out everywhere);
+    - bans the login through the Auth admin API;
+    - makes the database show them nothing.
+    Turning them back on lifts the ban. Their records, hours and leave stay either way.
+  - **Turned-off people are hidden** from the training matrix, the trainee picker and "Add hours for someone". More > Staff and the audit log still list them. Their past timesheets, records, leave and training still show under their name.
+  - **Nothing new can be added for them** (fourteenth migration). Nobody can add timesheets, training records, leave, site choices or food safety records for a turned-off person, not even the owner or the SQL editor. The page says, for example, "Ana's account is turned off, so you can't add hours for them". Their existing rows stay. This is one `active_staff_only` trigger function on each of those tables, using `require_active_staff()`.
+  - **Turned off means nothing works**, even with a token that hasn't expired:
+    - `is_active()` is inside `is_owner`, `is_manager`, `on_shift_at`, `can_see_site`, `shares_site_with` and the functions that act for yourself.
+    - A restrictive "active accounts only" policy is on every table and on Storage. Many policies only check `staff_id = auth.uid()`, so the helpers alone weren't enough.
+    - The one exception: a turned-off person can read their own `staff` row. `getSession` uses it to send them to `/auth/signout`, which signs them out with "Your account has been turned off. Talk to your manager."
+  - **Passwords**:
+    - `/auth/confirm` checks invite and reset links (`verifyOtp` with `token_hash`) and goes on to `/set-password`. That page has new + confirm, at least 10 characters, not your email, and Show/Hide.
+    - `/forgot-password` always says the same thing, whether or not the email has an account.
+    - Settings > Change password needs your current password. Supabase Auth checks it (`require_current_password`).
+    - Auth also refuses passwords under 10 characters (`minimum_password_length`).
+  - **Emails**: `supabase/templates/invite.html` and `recovery.html`. They use the Chutneys Ops name, a green button, and the link as plain text for email apps that block buttons. Locally they land in Mailpit at http://127.0.0.1:54324.
 - **Home** (`/home`): where every login lands.
   - A greeting by Auckland time of day ("Good morning, Ana") and the date.
   - A daily message: one original line a day, the same for everyone, picked by the Auckland date from about 60 lines in `web/lib/daily-messages.ts` (`pickMessage`).
@@ -68,7 +89,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Audited: every table in `public` except `staff_pins` (PIN hashes are secrets) and `audit_log` itself. Any column with `hash`, `password`, `secret` or `token` in its name is stripped before storing (`audit_redact`).
   - Only the owner can read it (RLS with `is_owner()`), not even managers. Nobody can insert, update or delete through the API, and an append-only trigger blocks changes even from the SQL editor.
   - The page shows newest first, 50 per page, with filters for person, area and Auckland dates. Each row says what happened in words ("Signed off Fridge temperatures", "Marked Ana's purchase paid back") and, for updates, the changed fields before and after. Friendly names live in `web/lib/audit.ts`, with raw names as a fallback.
-- **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
+- **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Timesheets** (`/time`, eleventh migration): hours are entered by hand, not clocked.
   - **Add my hours:** date, site, start and finish. A finish earlier than the start means the next morning. A live preview shows, for example, "7 h at work, 2 x 10 min paid rest, 1 x 30 min meal, 6.5 h paid".
@@ -88,8 +109,9 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - purchases (GST maths, CSV)
   - shared upload and CSV helpers (`uploads.ts`, `csv.ts`)
   - leave validation, the training matrix and the hours CSV
+  - staff accounts (statuses, invite checks) and password rules
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, and the audit log, including a check that every table is audited.
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -116,12 +138,32 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
    | `manager@test.local` | manager | view and sign off records at every site; add entries at the site they chose; approve hours |
    | `staff@test.local` | staff | add records only at the site they chose today; enter their own hours |
 
-6. Check `web/.env.local` has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (copy them from `npx supabase status`).
+6. Check `web/.env.local` has these three (copy the values from `npx supabase status`):
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=...         # API URL
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...  # Publishable key
+   SUPABASE_SECRET_KEY=...              # Secret key: server only, for invites and turning accounts off
+   ```
+
+   Never add `NEXT_PUBLIC_` to the secret key. That prefix copies a value into the code sent to every browser, and the secret key skips all row-level security. Invite and password-reset emails land in Mailpit at http://127.0.0.1:54324.
 7. `cd web` then `npm run dev`, and open http://localhost:3000. Studio (the database UI) is at http://localhost:54323.
 8. Before pushing: `npm test` and `npm run lint` in `web/`, and `npx supabase test db` in the root.
 9. End of day: `npx supabase stop`.
 
 ## Known follow-ups
+
+- **Staff accounts:**
+  - **Hosted Supabase settings before go-live:** `config.toml` only configures the local stack. In the hosted dashboard:
+    - turn off sign-ups;
+    - set the minimum password length to 10 and require the current password to change it;
+    - paste in the invite and reset templates;
+    - set Site URL and the `/auth/confirm` redirect URL to the real domain;
+    - set up custom SMTP (Supabase's built-in sender only mails team members, a few an hour).
+    Put `SUPABASE_SECRET_KEY` in the host's server environment variables, never with `NEXT_PUBLIC_`.
+  - **Email link scanners:** some work email systems (for example Outlook Safe Links) open links to check them, which uses up the one-time token before the person taps it. If that happens, make `/auth/confirm` show a "Continue" button that verifies on POST.
+  - **Names and emails:** there's no "edit name" yet, and `staff.email` is a copy taken at invite time. If someone's login email changes in Auth, the staff list still shows the old one.
+  - **Sign-out message:** a turned-off person sees "Your account has been turned off" only while their access token (up to 1 hour) is still valid. After that they're simply signed out, and the login form stays vague on purpose.
 
 - **`supabase/snippets/` is committed.** These are Studio scratch queries, and one changes site names and inserts a site. That data is already in `seed.sql`, so delete the folder and git-ignore it, so schema and data changes only happen through migrations and the seed.
 - **`web/README.md` is still the create-next-app boilerplate.** Replace it or point it to this README.
@@ -143,7 +185,6 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - **Notify managers** of new requests and vomiting/diarrhoea reports (part of the Slack work).
 - **Training:**
   - **Refreshers:** no "due again" dates yet. Add how often each topic must be refreshed and highlight overdue cells in the matrix.
-  - **Leavers:** the matrix lists every staff row. Add an `active` flag to staff when someone leaves.
 - **Orphaned uploads** (all three buckets): a file uploaded just before the browser closes stays with no record pointing at it. One scheduled job can clean `invoices`, `leave-documents` and `signatures` (files older than a day that nothing uses).
 - **Audit log:**
   - **Retention:** the log keeps everything forever and grows with every record entry. Decide with the owner how long to keep it (for example 7 years, like financial records), then prune in a migration that disables the append-only trigger on purpose.
@@ -248,6 +289,9 @@ Owner answers (fill in after the meeting):
 
 - **Every new business table must call `enable_audit()` in its migration**, for example `select enable_audit('stock_counts');`. The pgTAP test `supabase/tests/audit.test.sql` fails if a table in `public` has no audit trigger. Only tables holding secrets (like `staff_pins`) are left out, by adding them to that test's allowlist with a comment saying why.
 - When you add a table, also give it friendly names in `web/lib/audit.ts` (area, thing, any new columns) so the audit page reads well.
+- **A new table with rows about a person** (who did it, or who it's for) also gets the `active_staff_only` trigger, for example `create trigger active_staff_only before insert on stock_counts for each row execute function active_staff_only('counted_by', 'stock counts');`.
+- **Every new table must also call `enable_active_only()`**, for example `select enable_active_only('stock_counts');`, so turned-off accounts can't read or write it. `supabase/tests/staff_accounts.test.sql` fails if a table in `public` is missing it.
+- **The secret key (`SUPABASE_SECRET_KEY`) is only used in `web/lib/supabase/admin.ts`**, which imports `server-only`. Check the caller is an active owner with their own session *before* using it.
 
 - Real Chutneys data never goes in this repo. Use the sample seed data only.
 - Secrets (Supabase keys, Slack webhooks) go in `.env`, which is git-ignored.

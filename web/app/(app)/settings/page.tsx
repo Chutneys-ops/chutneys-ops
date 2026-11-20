@@ -4,9 +4,10 @@ import { BackLink } from "@/components/back-link";
 import { NotStaff } from "@/components/not-staff";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isManager } from "@/lib/supabase/session";
+import { ChangePasswordForm } from "./password-form";
 import { PinForm } from "./pin-form";
 
-// Settings (from the More menu): your account and your sign-off PIN
+// Settings (from the More menu): change password, and your sign-off PIN
 // (managers and owner). Sign out is on the More menu; shift controls live in
 // the header (Change site).
 export default async function SettingsPage() {
@@ -23,6 +24,12 @@ export default async function SettingsPage() {
       <p className="mt-1 text-sm text-muted">
         Signed in as {me.name} <span className="capitalize">({me.role})</span>
       </p>
+
+      <section className="mt-5 rounded-[14px] border border-line bg-white p-4">
+        <h2 className="text-lg font-semibold">Change password</h2>
+        <p className="mt-1 mb-4 text-sm text-muted">The password you sign in with.</p>
+        <ChangePasswordForm />
+      </section>
 
       <section className="mt-5 rounded-[14px] border border-line bg-white p-4">
         <h2 className="text-lg font-semibold">Sign-off PIN</h2>

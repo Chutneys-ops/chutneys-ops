@@ -6,6 +6,7 @@
 // still shows up sensibly before anyone adds a label here.
 
 import { aucklandShortDay, aucklandTime } from "./dates.ts";
+import { isRole, ROLE_LABELS } from "./staff.ts";
 import { TOPIC_LABELS, type TrainingTopic } from "./training.ts";
 
 export type AuditAction = "insert" | "update" | "delete";
@@ -170,11 +171,16 @@ const COLUMNS: Record<string, string> = {
   sort_order: "Order",
   site_kinds: "Site kinds",
   required_daily: "Required every day",
+  email: "Email",
+  invited_at: "Invite sent",
+  deactivated_at: "Turned off at",
+  deactivated_by: "Turned off by",
 };
 
 // Where a column means something different in one table.
 const TABLE_COLUMNS: Record<string, string> = {
   "staff.id": "Person",
+  "staff.active": "Account on",
   "sites.id": "Site",
   "shifts.staff_id": "Person",
   "record_templates.code": "Code",
@@ -206,6 +212,7 @@ const STAFF_COLUMNS = new Set([
   "trainer_id",
   "approved_by",
   "created_by",
+  "deactivated_by",
 ]);
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -267,6 +274,20 @@ export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_L
   if (action === "delete") return `Deleted ${thingLabel(entry.table_name)}`;
 
   switch (entry.table_name) {
+    case "staff": {
+      const name = str(row, "name") ?? "someone";
+      // The owner adding a row is an invite; the seed or a migration just adds.
+      if (action === "insert") return entry.actor_id ? `Invited ${name}` : `Added ${name} to staff`;
+      if (changed(entry, "active")) {
+        return entry.new_data?.active === true ? `Turned ${name}'s account back on` : `Turned off ${name}'s account`;
+      }
+      if (changed(entry, "role")) {
+        const role = str(entry.new_data, "role") ?? "";
+        return `Changed ${name}'s role to ${isRole(role) ? ROLE_LABELS[role] : role}`;
+      }
+      if (changed(entry, "invited_at")) return `Resent ${name}'s invite`;
+      break;
+    }
     case "shifts": {
       const site = lookups.sites[str(row, "site_id") ?? ""] ?? "a site";
       // Since timesheets, a shift row is just "which site today".

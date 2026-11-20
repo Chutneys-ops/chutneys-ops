@@ -44,7 +44,7 @@ export default async function MorePage() {
   const mine: Item[] = [
     { href: "/leave", label: "Leave", hint: "Request sick leave and see your requests" },
     { href: "/training", label: "Training", hint: "Your training records" },
-    { href: "/settings", label: "Settings", hint: isManager(me) ? "Your sign-off PIN" : "Your account" },
+    { href: "/settings", label: "Settings", hint: isManager(me) ? "Your password and sign-off PIN" : "Your password" },
   ];
   const managing: Item[] = [
     { href: "/leave/requests", label: "Leave requests", hint: "Approve or decline sick leave" },
@@ -52,6 +52,7 @@ export default async function MorePage() {
     { href: "/training/matrix", label: "Training matrix", hint: "Who is trained in what" },
   ];
   if (me.role === "owner") {
+    managing.unshift({ href: "/more/staff", label: "Staff", hint: "Invite people, change roles, turn off leavers" });
     managing.push({ href: "/more/export", label: "Export hours and leave", hint: "CSV for payroll" });
     managing.push({ href: "/more/audit", label: "Audit log", hint: "Who changed what, and when" });
   }

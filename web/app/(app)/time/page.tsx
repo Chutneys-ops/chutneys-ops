@@ -127,7 +127,9 @@ export default async function TimePage() {
       ? supabase.from("timesheets").select(SELECT).eq("status", "submitted").order("work_date").limit(500)
       : Promise.resolve({ data: [], error: null }),
     manager
-      ? supabase.from("staff").select("id, name").neq("id", userId).order("name")
+      ? // "Add hours for someone": turned-off people (leavers) are hidden.
+      // Their past timesheets still show, through the joins.
+      supabase.from("staff").select("id, name").eq("active", true).neq("id", userId).order("name")
       : Promise.resolve({ data: [], error: null }),
   ]);
 

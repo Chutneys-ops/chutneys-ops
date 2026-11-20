@@ -184,7 +184,12 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# Invite and password reset links come back to /auth/confirm on the app.
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3000/auth/confirm",
+  "http://localhost:3000/auth/confirm",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -197,13 +202,16 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project. Existing users can still sign in.
-enable_signup = true
+# Off: nobody can make their own account. The owner invites staff from
+# More > Staff (invites still work with sign-up off).
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# 10: the app asks for at least 10 characters, and Auth refuses shorter ones too.
+minimum_password_length = 10
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -253,7 +261,8 @@ enable_confirmations = false
 secure_password_change = false
 # If enabled, users will need to provide their current password to change their password, unless
 # they signed in with a one-time password, magic link, or recovery link.
-# require_current_password = true
+# On: Settings > Change password must send the current password.
+require_current_password = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 # Number of characters used in the email OTP.
@@ -271,10 +280,15 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Chutneys Ops emails. Locally they land in Mailpit: http://127.0.0.1:54324
+# The links use token_hash, which /auth/confirm checks with verifyOtp.
+[auth.email.template.invite]
+subject = "You're invited to Chutneys Ops"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Chutneys Ops password"
+content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

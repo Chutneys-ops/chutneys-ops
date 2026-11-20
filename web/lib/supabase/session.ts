@@ -1,24 +1,40 @@
 // Who is signed in, and where are they working right now?
 // Server-only helpers used by the pages under app/(app).
 
+import { redirect } from "next/navigation";
 import { STALE_HOURS } from "@/lib/hours";
+import type { Role } from "@/lib/staff";
 import type { createClient } from "./server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-export type Role = "staff" | "manager" | "owner";
-export type Me = { id: string; name: string; role: Role };
+export type { Role };
+export type Me = { id: string; name: string; role: Role; active: boolean };
 export type SiteSummary = { id: string; name: string; kind: string };
 export type CurrentShift = { id: string; clock_in: string; site: SiteSummary };
 
-/** userId is null when signed out. me is null when the login has no staff row. */
-export async function getSession(supabase: Supabase): Promise<{ userId: string | null; me: Me | null }> {
+/** Where a turned-off person is sent: it signs them out and says why. */
+export const DEACTIVATED_SIGNOUT_PATH = "/auth/signout";
+
+/** Like getSession, but never redirects. Only /auth/signout uses it. */
+export async function readSession(supabase: Supabase): Promise<{ userId: string | null; me: Me | null }> {
   const { data: auth } = await supabase.auth.getClaims();
   const userId = auth?.claims?.sub ?? null;
   if (!userId) return { userId: null, me: null };
-  // You can always read your own staff row (RLS "see self or owner").
-  const { data } = await supabase.from("staff").select("id, name, role").eq("id", userId).maybeSingle();
+  // You can always read your own staff row (RLS "see self or owner"), even
+  // when your account is turned off (the "active accounts only" exception).
+  const { data } = await supabase.from("staff").select("id, name, role, active").eq("id", userId).maybeSingle();
   return { userId, me: (data as Me | null) ?? null };
+}
+
+/** userId is null when signed out. me is null when the login has no staff row.
+ *  A turned-off person (staff.active = false) whose token hasn't expired yet
+ *  is sent to sign out. Every signed-in page calls this, so it happens on
+ *  their next page load. (The database already shows them nothing.) */
+export async function getSession(supabase: Supabase): Promise<{ userId: string | null; me: Me | null }> {
+  const session = await readSession(supabase);
+  if (session.me && !session.me.active) redirect(DEACTIVATED_SIGNOUT_PATH);
+  return session;
 }
 
 export function isManager(me: Me): boolean {

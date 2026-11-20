@@ -25,7 +25,9 @@ export default async function TrainingMatrixPage() {
   if (!isManager(me)) notFound();
 
   const [staffResult, recordsResult] = await Promise.all([
-    supabase.from("staff").select("id, name").order("name"),
+    // Current staff only: turned-off people (leavers) aren't listed. Their
+    // training records are kept and still show on /training.
+    supabase.from("staff").select("id, name").eq("active", true).order("name"),
     supabase.from("training_records").select("trainee_id, topic, trained_on, trainee_signed_at"),
   ]);
   const error = staffResult.error ?? recordsResult.error;

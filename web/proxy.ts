@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Pages that need a logged-in user.
-const PROTECTED_PREFIXES = ["/home", "/install", "/start", "/records", "/time", "/purchases", "/more", "/leave", "/training", "/settings"];
+// Pages that need a logged-in user. /set-password too: the invite or reset
+// link (/auth/confirm) signs you in first. /forgot-password and /auth/* are
+// for signed-out people, so they're not on this list.
+const PROTECTED_PREFIXES = ["/home", "/install", "/start", "/records", "/time", "/purchases", "/more", "/leave", "/training", "/settings", "/set-password"];
 
 export async function proxy(request: NextRequest) {
   // Start with a "carry on as normal" response; Supabase may add cookies to it.
