@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
   cacheComponents: true,
+  // The verifier pack PDF reads its font files at run time, which the build
+  // can't see from the code, so tell it to ship them with these two routes.
+  outputFileTracingIncludes: {
+    "/more/verifier-pack/pdf": ["./assets/fonts/**"],
+    "/api/cron/verifier-pack": ["./assets/fonts/**"],
+  },
   partialPrefetching: true,
   turbopack: {
     // The repo root has its own package-lock.json (for the Supabase CLI),

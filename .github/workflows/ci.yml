@@ -66,7 +66,7 @@ jobs:
           npx supabase start
           -x realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
-      # Create every bucket in supabase/config.toml: invoices,
+      # Create every bucket in supabase/config.toml: invoices, verifier-packs,
       # leave-documents and signatures.
       - name: Create storage buckets
         run: npx supabase seed buckets

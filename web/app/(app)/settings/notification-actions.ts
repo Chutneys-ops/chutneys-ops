@@ -8,6 +8,7 @@ import { refresh } from "next/cache";
 import { deliver, pushConfigured, type Subscription } from "@/lib/push";
 import { isCategory, TEST_MESSAGE, type Category } from "@/lib/reminders";
 import { createClient } from "@/lib/supabase/server";
+import { parseTradingDays } from "@/lib/trading-days";
 
 export type Result = { ok: boolean; message?: string };
 
@@ -89,6 +90,22 @@ export async function setPref(category: string, on: boolean): Promise<Result> {
 }
 
 /** Managers: when a site opens (for the opening checks reminder). */
+/** Managers: the days a site trades (1 = Monday ... 7 = Sunday). The
+ *  database checks the role and the days again (set_site_trading_days). */
+export async function saveTradingDays(siteId: string, days: number[]): Promise<Result> {
+  const { supabase, userId } = await signedIn();
+  if (!userId) return SIGNED_OUT;
+  const parsed = parseTradingDays(Array.isArray(days) ? days : []);
+  if (parsed.error) return { ok: false, message: parsed.error };
+  const { error } = await supabase.rpc("set_site_trading_days", { site: siteId, days: parsed.days });
+  if (error) {
+    const readable = error.code === "42501" || error.code === "22023";
+    return { ok: false, message: readable ? error.message : `Could not save: ${error.message}` };
+  }
+  refresh();
+  return { ok: true, message: "Saved" };
+}
+
 export async function saveOpeningTime(siteId: string, time: string): Promise<Result> {
   const { supabase, userId } = await signedIn();
   if (!userId) return SIGNED_OUT;
