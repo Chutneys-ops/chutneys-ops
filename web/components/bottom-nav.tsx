@@ -25,7 +25,8 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
-const TABS: { label: string; href: string; icon: ReactNode }[] = [
+// `also`: other paths that belong to the tab, so it stays highlighted there.
+const TABS: { label: string; href: string; also?: string[]; icon: ReactNode }[] = [
   {
     label: "Records",
     href: "/records",
@@ -59,7 +60,8 @@ const TABS: { label: string; href: string; icon: ReactNode }[] = [
   },
   {
     label: "More",
-    href: "/settings",
+    href: "/more",
+    also: ["/leave", "/training", "/settings"],
     icon: (
       <Icon>
         <circle cx="5" cy="12" r="1.5" />
@@ -93,7 +95,9 @@ function NavBar({ pathname }: { pathname: string }) {
     >
       <ul className="mx-auto grid h-16 max-w-md grid-cols-4">
         {TABS.map((tab) => {
-          const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          const active = [tab.href, ...(tab.also ?? [])].some(
+            (href) => pathname === href || pathname.startsWith(`${href}/`),
+          );
           return (
             <li key={tab.label}>
               <Link

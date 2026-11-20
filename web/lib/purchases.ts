@@ -5,8 +5,25 @@
 // the generated gst_amount). These functions mirror it so the form can
 // explain problems before the database says no.
 
+import { aucklandClock24, buildCsv } from "./csv.ts";
 import { aucklandDate } from "./dates.ts";
 import { aucklandLocalToUtc } from "./hours.ts";
+import { checkUploadFile, uploadExtension } from "./uploads.ts";
+
+// The file and CSV helpers moved to uploads.ts and csv.ts when sick leave
+// needed them too. Re-exported here so purchases code keeps its names.
+export {
+  PHOTO_MAX_WIDTH,
+  PHOTO_QUALITY,
+  PHOTO_TARGET_BYTES,
+  UPLOAD_MAX_BYTES as INVOICE_MAX_BYTES,
+  isPdf,
+  newFileId,
+  scaledSize,
+} from "./uploads.ts";
+export { aucklandClock24, buildCsv, csvCell, type CsvCell } from "./csv.ts";
+export const invoiceExtension = uploadExtension;
+export const checkInvoiceFile = checkUploadFile;
 
 // ---- Money and GST ---------------------------------------------------------
 
@@ -122,47 +139,6 @@ export function validatePurchase(input: PurchaseInput, hasInvoice: boolean): Pur
 
 // ---- Invoice files ------------------------------------------------------------
 
-export const INVOICE_MAX_BYTES = 5 * 1024 * 1024; // matches the bucket in config.toml
-export const PHOTO_MAX_WIDTH = 1600;
-export const PHOTO_QUALITY = 0.7;
-export const PHOTO_TARGET_BYTES = 400 * 1024;
-
-const EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "application/pdf": "pdf",
-};
-
-export function isPdf(type: string): boolean {
-  return type === "application/pdf";
-}
-
-/** "image/jpeg" -> "jpg", or null for a type the bucket won't take. */
-export function invoiceExtension(type: string): string | null {
-  return EXTENSIONS[type] ?? null;
-}
-
-/** Error message for a file the bucket would refuse, or null if it's fine.
- *  Run on the file that will actually upload (after shrinking a photo). */
-export function checkInvoiceFile(file: { type: string; size: number }): string | null {
-  if (!invoiceExtension(file.type)) return "Use a photo (JPEG, PNG, WebP) or a PDF.";
-  if (file.size === 0) return "That file is empty.";
-  if (file.size > INVOICE_MAX_BYTES) return "That file is over 5 MB. Take a photo instead, or shrink the PDF.";
-  return null;
-}
-
-/** A random id (UUID v4) for a file name. crypto.randomUUID() only works on
- *  https or localhost, so testing on a phone over http://192.168... would
- *  break; crypto.getRandomValues works everywhere. */
-export function newFileId(): string {
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40; // version 4
-  b[8] = (b[8] & 0x3f) | 0x80; // variant
-  const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
 /** Where an invoice goes: {site_id}/{yyyy}/{mm}/{id}.{ext}, by Auckland month. */
 export function invoicePath(siteId: string, when: Date, id: string, ext: string): string {
   const [year, month] = aucklandDate(when).split("-");
@@ -176,12 +152,6 @@ const PATH_RE =
 export function isInvoicePathFor(path: string, siteId: string): boolean {
   const match = PATH_RE.exec(path);
   return Boolean(match && match[1].toLowerCase() === siteId.toLowerCase());
-}
-
-/** Size to draw a photo at: at most maxWidth wide, never made bigger. */
-export function scaledSize(width: number, height: number, maxWidth = PHOTO_MAX_WIDTH): { width: number; height: number } {
-  if (width <= maxWidth) return { width, height };
-  return { width: maxWidth, height: Math.round((height * maxWidth) / width) };
 }
 
 // ---- Months ---------------------------------------------------------------------
@@ -218,35 +188,6 @@ export function monthLabel(ym: string): string {
 }
 
 // ---- CSV --------------------------------------------------------------------------
-
-export type CsvCell = string | number | null | undefined;
-
-/** One CSV cell. Quotes when needed (RFC 4180). Text starting with = + - @
- *  gets a ' in front, so Excel shows it instead of running it as a formula
- *  (a supplier called "=HYPERLINK(...)" could otherwise do harm). */
-export function csvCell(value: CsvCell): string {
-  if (value === null || value === undefined) return "";
-  let text = String(value);
-  if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-/** Rows -> CSV text with Windows line endings (what Excel expects). */
-export function buildCsv(header: string[], rows: CsvCell[][]): string {
-  return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
-}
-
-const clock24 = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Pacific/Auckland",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
-
-/** "14:05": 24-hour Auckland time, which sorts and filters well in Excel. */
-export function aucklandClock24(value: string | Date): string {
-  return clock24.format(new Date(value));
-}
 
 /** One purchase as the export route reads it from the database. */
 export type ExportRow = {
