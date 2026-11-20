@@ -50,7 +50,12 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - After both have signed, a trigger locks the record. Before that, only the trainee's confirmation can be added. Nobody can edit or delete records through the API.
   - **Training matrix** (managers): staff down the side, topics across, the latest date in each cell. Dates the trainee hasn't confirmed yet are marked with `*`.
 - **Hours and leave export** (owner only, More > Export hours and leave): a CSV of shifts and approved leave for a date range (up to 92 days): name, site, date, start, end, hours, type, edit note. Leave rows put their first and last day in Start and End. The route returns 403 for anyone but the owner and fetches in pages, so it isn't cut off at the API's 1,000-row limit.
-- **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Export hours and leave. More stays highlighted on its sub-pages.
+- **Audit log** (tenth migration, owner only at More > Audit log): who changed what, and when, on every business table.
+  - One trigger function, `audit_row()`, writes a row for every insert, update and delete: time, person (`auth.uid()`, which is still the real person inside functions like `mark_reimbursed`), their role, table, row id, old and new data, and for updates only the changed columns. "System" means a migration, the seed or the SQL editor. An update that changes nothing writes no row, so re-running the seed adds nothing.
+  - Audited: every table in `public` except `staff_pins` (PIN hashes are secrets) and `audit_log` itself. Any column with `hash`, `password`, `secret` or `token` in its name is stripped before storing (`audit_redact`).
+  - Only the owner can read it (RLS with `is_owner()`), not even managers. Nobody can insert, update or delete through the API, and an append-only trigger blocks changes even from the SQL editor.
+  - The page shows newest first, 50 per page, with filters for person, area and Auckland dates. Each row says what happened in words ("Signed off Fridge temperatures", "Marked Ana's purchase paid back") and, for updates, the changed fields before and after. Friendly names live in `web/lib/audit.ts`, with raw names as a fallback.
+- **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Time** (`/time`): your current shift ("On shift at Orewa Cafe since 9:02 am") and this week's shifts with total hours. Missing clock-outs show as "your manager will fix it" and count zero hours. Managers and the owner also see the "Needs fixing" list.
 - **Bottom navigation**: Records, Time, Purchases and More (the menu above).
@@ -61,7 +66,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - shared upload and CSV helpers (`uploads.ts`, `csv.ts`)
   - leave validation, the training matrix and the hours CSV
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave and training, including the storage policies.
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies) and the audit log, including a check that every table is audited.
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -118,6 +123,10 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - **Refreshers:** no "due again" dates yet. Add how often each topic must be refreshed and highlight overdue cells in the matrix.
   - **Leavers:** the matrix lists every staff row. Add an `active` flag to staff when someone leaves.
 - **Orphaned uploads** (all three buckets): a file uploaded just before the browser closes stays with no record pointing at it. One scheduled job can clean `invoices`, `leave-documents` and `signatures` (files older than a day that nothing uses).
+- **Audit log:**
+  - **Retention:** the log keeps everything forever and grows with every record entry. Decide with the owner how long to keep it (for example 7 years, like financial records), then prune in a migration that disables the append-only trigger on purpose.
+  - **Health information:** sick leave rows (including vomiting or diarrhoea answers) are copied into the log. Only the owner can read it, but count it as health data under the Privacy Act.
+  - **Storage files** (invoices, certificates, signatures) aren't audited, only the database rows that point at them.
 - **Purchases:**
   - **Export row limit:** the purchases page and CSV read up to 1,000 rows in one request. Page through like the hours export does if a month ever has more.
   - **Hosted buckets:** `config.toml` only creates the buckets (`invoices`, `leave-documents`, `signatures`) locally. Before go-live, run `npx supabase seed buckets --remote` (or create them in the dashboard with the same settings).
@@ -205,6 +214,9 @@ Owner answers (fill in after the meeting):
 -
 
 ## Rules for this repo
+
+- **Every new business table must call `enable_audit()` in its migration**, for example `select enable_audit('stock_counts');`. The pgTAP test `supabase/tests/audit.test.sql` fails if a table in `public` has no audit trigger. Only tables holding secrets (like `staff_pins`) are left out, by adding them to that test's allowlist with a comment saying why.
+- When you add a table, also give it friendly names in `web/lib/audit.ts` (area, thing, any new columns) so the audit page reads well.
 
 - Real Chutneys data never goes in this repo. Use the sample seed data only.
 - Secrets (Supabase keys, Slack webhooks) go in `.env`, which is git-ignored.
