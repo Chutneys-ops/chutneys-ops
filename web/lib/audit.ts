@@ -68,6 +68,9 @@ const TABLES: Record<string, [string, string]> = {
   notice_reads: ["Notice reads", "notice read"],
   roster_weeks: ["Roster weeks", "roster week"],
   roster_shifts: ["Roster shifts", "rostered shift"],
+  push_subscriptions: ["Notification devices", "notification device"],
+  notification_prefs: ["Notification settings", "notification setting"],
+  sent_notifications: ["Reminders sent", "reminder"],
 };
 
 /** "purchases" -> "Purchases"; unknown tables -> the raw name. */
@@ -199,6 +202,16 @@ const COLUMNS: Record<string, string> = {
   roster_week_id: "Roster week",
   position: "Position",
   updated_at: "Updated at",
+  opens_at: "Opens at",
+  user_agent: "Device",
+  last_used_at: "Last used",
+  notices: "Notices",
+  roster: "Roster",
+  reminders: "Reminders",
+  approvals: "Approvals",
+  for_date: "For date",
+  dedupe_key: "Reminder key",
+  sent_at: "Sent at",
 };
 
 // Where a column means something different in one table.
@@ -211,6 +224,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   "temp_units.name": "Unit",
   "notices.edited_at": "Edited at",
   "roster_shifts.created_by": "Rostered by",
+  "sent_notifications.kind": "Reminder",
 };
 
 /** Friendly column name; the raw name if there's no label. */
@@ -279,6 +293,15 @@ export function actorName(entry: Pick<AuditEntry, "actor_id">, lookups: AuditLoo
 }
 
 // ---- What happened -------------------------------------------------------------------
+
+/** sent_notifications.kind -> words, for "Sent Ana the fridge reminder". */
+const REMINDER_KINDS: Record<string, string> = {
+  fridge_staff: "the fridge temperatures reminder",
+  fridge_manager: "the fridge temperatures missing alert",
+  opening_checks: "the opening checks reminder",
+  approvals_digest: "the waiting approvals summary",
+  shift_tomorrow: "the shift tomorrow reminder",
+};
 
 function str(row: Row | null, key: string): string | null {
   const value = row?.[key];
@@ -395,6 +418,27 @@ export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_L
       const date = str(row, "work_date") ?? "";
       if (action === "insert") return `Rostered ${person("staff_id")} on ${date}`;
       return `Changed ${person("staff_id")}'s rostered shift on ${date}`;
+    }
+    case "sites": {
+      const name = str(row, "name") ?? "a site";
+      if (action === "update" && changed(entry, "opens_at")) {
+        return `Changed ${name}'s opening time to ${str(entry.new_data, "opens_at")?.slice(0, 5) ?? "?"}`;
+      }
+      break;
+    }
+    case "push_subscriptions": {
+      if (action === "insert") return "Turned on notifications on a device";
+      break;
+    }
+    case "notification_prefs": {
+      return "Changed notification settings";
+    }
+    case "sent_notifications": {
+      if (action === "insert") {
+        const what = REMINDER_KINDS[str(row, "kind") ?? ""] ?? "a reminder";
+        return `Sent ${person("staff_id")} ${what}`;
+      }
+      break;
     }
     case "training_records": {
       const topic = str(row, "topic");

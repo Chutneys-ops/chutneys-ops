@@ -4,18 +4,29 @@ import { BackLink } from "@/components/back-link";
 import { NotStaff } from "@/components/not-staff";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isManager } from "@/lib/supabase/session";
+import { prefsFrom } from "@/lib/reminders";
+import { NotificationSettings } from "./notifications";
+import { OpeningTimesForm } from "./opening-times-form";
 import { ChangePasswordForm } from "./password-form";
 import { PinForm } from "./pin-form";
 
-// Settings (from the More menu): change password, and your sign-off PIN
-// (managers and owner). Sign out is on the More menu; shift controls live in
-// the header (Change site).
+// Settings (from the More menu): notifications, change password, your
+// sign-off PIN (managers and owner) and sites' opening times (managers).
+// Sign out is on the More menu; shift controls live in the header (Change site).
 export default async function SettingsPage() {
   await connection();
   const supabase = await createClient();
   const { userId, me } = await getSession(supabase);
   if (!userId) redirect("/login");
   if (!me) return <NotStaff />;
+
+  const manager = isManager(me);
+  const [{ data: prefRow }, { data: sites }] = await Promise.all([
+    supabase.from("notification_prefs").select("notices, roster, reminders, approvals").maybeSingle(),
+    manager
+      ? supabase.from("sites").select("id, name, opens_at").eq("active", true).order("name")
+      : Promise.resolve({ data: null }),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-md px-4 pt-2 pb-6">
@@ -25,6 +36,14 @@ export default async function SettingsPage() {
         Signed in as {me.name} <span className="capitalize">({me.role})</span>
       </p>
 
+      <section id="notifications" className="mt-5 rounded-[14px] border border-line bg-white p-4">
+        <h2 className="mb-2 text-lg font-semibold">Notifications</h2>
+        <NotificationSettings
+          prefs={prefsFrom(prefRow)}
+          publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null}
+        />
+      </section>
+
       <section className="mt-5 rounded-[14px] border border-line bg-white p-4">
         <h2 className="text-lg font-semibold">Change password</h2>
         <p className="mt-1 mb-4 text-sm text-muted">The password you sign in with.</p>
@@ -33,7 +52,7 @@ export default async function SettingsPage() {
 
       <section className="mt-5 rounded-[14px] border border-line bg-white p-4">
         <h2 className="text-lg font-semibold">Sign-off PIN</h2>
-        {isManager(me) ? (
+        {manager ? (
           <>
             <p className="mt-1 mb-4 text-sm text-muted">
               You enter this PIN when you verify and sign a day&apos;s food safety records. Only a
@@ -47,6 +66,17 @@ export default async function SettingsPage() {
           </p>
         )}
       </section>
+
+      {manager && sites && sites.length > 0 && (
+        <section className="mt-5 rounded-[14px] border border-line bg-white p-4">
+          <h2 className="text-lg font-semibold">Opening times</h2>
+          <p className="mt-1 mb-4 text-sm text-muted">
+            When each site usually opens. If the opening checks aren&apos;t done 30 minutes later, the people
+            at that site get a reminder.
+          </p>
+          <OpeningTimesForm sites={sites as { id: string; name: string; opens_at: string }[]} />
+        </section>
+      )}
     </main>
   );
 }

@@ -9,6 +9,7 @@
 // messages first.
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import { notifyRosterPublished } from "@/lib/notify";
 import { validateShift } from "@/lib/roster";
 import { createClient } from "@/lib/supabase/server";
@@ -119,7 +120,8 @@ export async function publishWeek(
   const { data: rows } = await supabase.from("roster_shifts").select("staff_id").eq("roster_week_id", week.id);
   const staffIds = [...new Set((rows ?? []).map((r) => r.staff_id as string))];
   // After the publish has succeeded, so a failed publish never notifies.
-  await notifyRosterPublished({ weekId: week.id, siteId: week.siteId, weekStart: week.monday, staffIds, republished });
+  // after(): the pushes go out once the response is sent.
+  after(() => notifyRosterPublished({ weekId: week.id, siteId: week.siteId, weekStart: week.monday, staffIds, republished }));
 
   refresh();
   return { seq, ok: true, message: republished ? "Re-published. Staff see the changes." : "Published. Staff can see their shifts." };

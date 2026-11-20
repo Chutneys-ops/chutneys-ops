@@ -7,9 +7,11 @@
 // RLS, decide_leave, clear_to_work). These checks only give friendly messages.
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import { aucklandDate } from "@/lib/dates";
 import { parseHours, validateLeave } from "@/lib/leave";
 import { createClient } from "@/lib/supabase/server";
+import { notifyLeaveDecided } from "@/lib/notify";
 import { isOwnFilePath } from "@/lib/uploads";
 
 export type LeaveResult = { ok: boolean; message?: string; errors?: Record<string, string> };
@@ -97,6 +99,12 @@ export async function decideLeave(requestId: string, prev: DecisionState, formDa
     note: note || null,
   });
   if (error) return { seq, message: dbMessage(error, "Could not save the decision") };
+
+  // Tell the person, once the response is sent. decide_leave succeeded, so
+  // the caller is a manager allowed to decide it.
+  const { data: auth } = await supabase.auth.getClaims();
+  const decidedBy = auth?.claims?.sub ?? "";
+  after(() => notifyLeaveDecided(requestId, decidedBy));
 
   refresh();
   return { seq, ok: true, message: status === "approved" ? "Approved" : "Declined" };

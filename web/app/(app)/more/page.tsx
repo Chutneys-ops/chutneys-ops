@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { logout } from "@/app/login/actions";
 import { NotStaff } from "@/components/not-staff";
+import { SignOutButton } from "@/components/sign-out-button";
 import { loadMyInbox } from "@/lib/supabase/notices";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isManager } from "@/lib/supabase/session";
@@ -88,14 +88,7 @@ export default async function MorePage() {
       <Menu items={mine} />
       {isManager(me) && <Menu title="Managing" items={managing} />}
 
-      <form action={logout} className="mt-5">
-        <button
-          type="submit"
-          className="min-h-12 w-full rounded-xl border border-line bg-white px-4 font-semibold text-ink hover:border-muted"
-        >
-          Sign out
-        </button>
-      </form>
+      <SignOutButton />
     </main>
   );
 }
