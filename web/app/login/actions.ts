@@ -21,6 +21,9 @@ export async function login(
 
   if (error) {
     // Keep it vague on purpose: don't reveal whether the email exists.
+    // That includes turned-off (banned) accounts: Supabase Auth says
+    // "user_banned" even when the password is wrong, so showing "your
+    // account is turned off" would tell anyone that the email was staff.
     return { error: "Email or password is incorrect." };
   }
 

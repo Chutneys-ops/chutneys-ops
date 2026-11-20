@@ -221,6 +221,50 @@ test("what happened: timesheets", () => {
   assert.equal(formatAuditValue("approved_by", MIA, lookups), "Mia");
 });
 
+test("what happened: staff accounts", () => {
+  const OLLY = "d0000000-0000-0000-0000-00000000000d";
+  const ana = { id: ANA, name: "Ana", role: "staff", active: true };
+  const owner = { actor_id: OLLY, actor_role: "owner", table_name: "staff" };
+  assert.equal(describeAudit(entry({ ...owner, action: "insert", new_data: ana }), lookups), "Invited Ana");
+  assert.equal(
+    describeAudit(entry({ ...owner, actor_id: null, actor_role: "system", action: "insert", new_data: ana }), lookups),
+    "Added Ana to staff",
+  );
+  assert.equal(
+    describeAudit(
+      entry({ ...owner, action: "update", old_data: ana, new_data: { ...ana, role: "manager" }, changed_fields: ["role"] }),
+      lookups,
+    ),
+    "Changed Ana's role to Manager",
+  );
+  const off = { ...ana, active: false, deactivated_at: "2026-11-20T01:05:00Z", deactivated_by: OLLY };
+  assert.equal(
+    describeAudit(
+      entry({ ...owner, action: "update", old_data: ana, new_data: off, changed_fields: ["active", "deactivated_at", "deactivated_by"] }),
+      lookups,
+    ),
+    "Turned off Ana's account",
+  );
+  assert.equal(
+    describeAudit(
+      entry({ ...owner, action: "update", old_data: off, new_data: ana, changed_fields: ["active", "deactivated_at", "deactivated_by"] }),
+      lookups,
+    ),
+    "Turned Ana's account back on",
+  );
+  assert.equal(
+    describeAudit(
+      entry({ ...owner, action: "update", old_data: ana, new_data: { ...ana, invited_at: "2026-11-20T01:05:00Z" }, changed_fields: ["invited_at"] }),
+      lookups,
+    ),
+    "Resent Ana's invite",
+  );
+  assert.equal(columnLabel("staff", "active"), "Account on");
+  assert.equal(columnLabel("sites", "active"), "Open");
+  assert.equal(columnLabel("staff", "deactivated_by"), "Turned off by");
+  assert.equal(formatAuditValue("deactivated_by", MIA, lookups), "Mia");
+});
+
 test("change list: only the changed fields, before and after", () => {
   const list = changeList(
     entry({
