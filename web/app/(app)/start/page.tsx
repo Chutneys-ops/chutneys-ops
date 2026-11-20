@@ -16,14 +16,16 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
   if (!userId) redirect("/login");
   if (!me) return <NotStaff />;
 
-  const { change } = await searchParams;
+  const { change, return: back } = await searchParams;
+  // Came from Home ("Choose site" / "Change site"): go back there after.
+  const returnTo = back === "home" ? "/home" : "/records";
   const [shift, clearance] = await Promise.all([
     getCurrentShift(supabase, userId),
     // Vomiting or diarrhoea reported and not cleared: start_shift will refuse.
     supabase.rpc("needs_clearance"),
   ]);
   const needsClearance = clearance.data === true;
-  if (shift && change !== "1") redirect("/records");
+  if (shift && change !== "1") redirect(returnTo);
 
   // RLS lets every signed-in person read active sites (for this picker).
   const { data: sites, error } = await supabase
@@ -72,10 +74,10 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
             <li key={site.id}>
               {/* Each card is its own form: tapping it calls start_shift for
                   that site. .bind fills in the site id on the server. */}
-              <form action={startShift.bind(null, site.id)}>
+              <form action={startShift.bind(null, site.id, returnTo)}>
                 <button
                   type="submit"
-                  className={`flex min-h-20 w-full items-center gap-3 rounded-[14px] border px-4 py-4 text-left hover:border-muted active:bg-primary-light ${
+                  className={`flex min-h-20 w-full items-center gap-3 rounded-[14px] border px-4 py-4 text-left text-ink hover:border-muted active:bg-primary-light ${
                     here ? "border-primary bg-primary-light" : "border-line bg-white"
                   }`}
                 >
@@ -108,12 +110,16 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
         })}
       </ul>
 
-      {(shift || isManager(me)) && (
+      {(shift || isManager(me) || returnTo === "/home") && (
         <Link
-          href="/records"
+          href={returnTo}
           className="mt-4 flex min-h-12 items-center justify-center text-sm font-medium text-primary hover:text-primary-dark"
         >
-          {shift ? "Stay where I am" : "Just view records (don't choose a site)"}
+          {shift
+            ? "Stay where I am"
+            : returnTo === "/home"
+              ? "Back to Home"
+              : "Just view records (don't choose a site)"}
         </Link>
       )}
     </main>

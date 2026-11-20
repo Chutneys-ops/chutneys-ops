@@ -169,6 +169,7 @@ const COLUMNS: Record<string, string> = {
   period: "Period",
   sort_order: "Order",
   site_kinds: "Site kinds",
+  required_daily: "Required every day",
 };
 
 // Where a column means something different in one table.

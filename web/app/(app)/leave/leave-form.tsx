@@ -8,6 +8,7 @@
 // remove the file again (the action does too).
 
 import { useRef, useState, type FormEvent } from "react";
+import { ChoiceOption } from "@/components/choice-option";
 import { DocumentPicker, type PickedFile } from "@/components/document-picker";
 import {
   DEFAULT_HOURS_PER_DAY,
@@ -26,8 +27,6 @@ type Phase = "idle" | "preparing" | "uploading" | "saving";
 
 const inputClass =
   "mt-1.5 min-h-12 w-full rounded-xl border bg-white px-3 text-base text-ink focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none";
-const choiceClass =
-  "flex min-h-12 cursor-pointer items-center justify-center rounded-xl border border-line bg-white px-2 text-center text-sm font-medium has-checked:border-primary has-checked:bg-primary-light has-checked:text-primary-dark";
 
 export function LeaveForm({ userId, today }: { userId: string; today: string }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -143,28 +142,12 @@ export function LeaveForm({ userId, today }: { userId: string; today: string }) 
       <fieldset>
         <legend className="text-sm font-semibold text-ink">How much leave?</legend>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
-          <label className={choiceClass}>
-            <input
-              type="radio"
-              name="amount"
-              value="days"
-              checked={amount === "days"}
-              onChange={() => setAmount("days")}
-              className="sr-only"
-            />
+          <ChoiceOption name="amount" value="days" checked={amount === "days"} onChange={() => setAmount("days")}>
             Whole days
-          </label>
-          <label className={choiceClass}>
-            <input
-              type="radio"
-              name="amount"
-              value="hours"
-              checked={amount === "hours"}
-              onChange={() => setAmount("hours")}
-              className="sr-only"
-            />
+          </ChoiceOption>
+          <ChoiceOption name="amount" value="hours" checked={amount === "hours"} onChange={() => setAmount("hours")}>
             Hours
-          </label>
+          </ChoiceOption>
         </div>
         {amount === "days" ? (
           <div className="mt-2">
@@ -207,10 +190,9 @@ export function LeaveForm({ userId, today }: { userId: string; today: string }) 
         <legend className="text-sm font-semibold text-ink">Reason</legend>
         <div className="mt-1.5 grid grid-cols-3 gap-2">
           {LEAVE_REASONS.map((reason) => (
-            <label key={reason} className={choiceClass}>
-              <input type="radio" name="reason" value={reason} defaultChecked={reason === "sick"} className="sr-only" />
+            <ChoiceOption key={reason} name="reason" value={reason} defaultChecked={reason === "sick"}>
               {LEAVE_REASON_LABELS[reason]}
-            </label>
+            </ChoiceOption>
           ))}
         </div>
         {fieldError("reason")}
@@ -222,14 +204,12 @@ export function LeaveForm({ userId, today }: { userId: string; today: string }) 
           Food safety: if yes, you can&apos;t work with food until a manager clears you (usually 48 hours after it stops).
         </p>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
-          <label className={choiceClass}>
-            <input type="radio" name="gi_symptoms" value="yes" className="sr-only" />
+          <ChoiceOption name="gi_symptoms" value="yes">
             Yes
-          </label>
-          <label className={choiceClass}>
-            <input type="radio" name="gi_symptoms" value="no" className="sr-only" />
+          </ChoiceOption>
+          <ChoiceOption name="gi_symptoms" value="no">
             No
-          </label>
+          </ChoiceOption>
         </div>
         {fieldError("gi_symptoms")}
       </fieldset>

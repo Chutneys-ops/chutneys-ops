@@ -49,6 +49,7 @@ test("table and column names, raw names as a fallback", () => {
   assert.equal(columnLabel("purchases", "total_incl_gst"), "Total incl GST");
   assert.equal(columnLabel("staff", "id"), "Person");
   assert.equal(columnLabel("purchases", "mystery_column"), "mystery_column");
+  assert.equal(columnLabel("record_templates", "required_daily"), "Required every day");
   const options = areaOptions();
   assert.ok(options.some(([table, label]) => table === "purchases" && label === "Purchases"));
   assert.deepEqual(

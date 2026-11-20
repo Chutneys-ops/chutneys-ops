@@ -25,8 +25,8 @@ export async function login(
   }
 
   // redirect() throws, so it must be outside any try/catch.
-  // /start sends you to Records if you have already chosen a site today.
-  redirect("/start");
+  // Always Home after signing in: never a "next" or last-visited page.
+  redirect("/home");
 }
 
 export async function logout() {

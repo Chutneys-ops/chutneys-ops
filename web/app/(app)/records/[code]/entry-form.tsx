@@ -10,6 +10,7 @@
 // action. The server action and the trigger still check everything.
 
 import { useActionState, useState, type FormEvent } from "react";
+import { ChoiceOption } from "@/components/choice-option";
 import {
   findOutOfRange,
   limitText,
@@ -281,20 +282,17 @@ function FieldInput({
           </legend>
           <div className="mt-1.5 grid grid-cols-2 gap-2">
             {(["yes", "no"] as const).map((choice) => (
-              <label
+              <ChoiceOption
                 key={choice}
-                className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border border-line bg-white font-medium has-checked:border-primary has-checked:bg-primary-light has-checked:text-primary-dark"
+                textSize="md"
+                showRadio
+                name={field.key}
+                value={choice}
+                required={required}
+                defaultChecked={defaultValue === choice}
               >
-                <input
-                  type="radio"
-                  name={field.key}
-                  value={choice}
-                  required={required}
-                  defaultChecked={defaultValue === choice}
-                  className="h-5 w-5 accent-primary"
-                />
                 {choice === "yes" ? "Yes" : "No"}
-              </label>
+              </ChoiceOption>
             ))}
           </div>
           {/* e.g. "No" on an opening check that expects "Yes". */}

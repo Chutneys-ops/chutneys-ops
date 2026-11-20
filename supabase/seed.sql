@@ -287,3 +287,22 @@ on conflict (code) do update set
   site_kinds = excluded.site_kinds,
   sort_order = excluded.sort_order,
   fields = excluded.fields;
+
+-- Records that must be done every day the site is open (Home's "Due
+-- today"). Everything else is filled in only when it happens. Same list as
+-- the required_daily migration. Re-running changes nothing.
+update record_templates
+set required_daily = code in (
+  'fridge_daily',
+  'opening_checks_truck',
+  'opening_checks_cafe',
+  'opening_checks_restaurant',
+  'cleaning'
+)
+where required_daily is distinct from (code in (
+  'fridge_daily',
+  'opening_checks_truck',
+  'opening_checks_cafe',
+  'opening_checks_restaurant',
+  'cleaning'
+));

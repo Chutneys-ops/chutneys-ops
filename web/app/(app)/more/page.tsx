@@ -18,7 +18,7 @@ function Menu({ title, items }: { title?: string; items: Item[] }) {
       <ul className="divide-y divide-line rounded-[14px] border border-line bg-white">
         {items.map((item) => (
           <li key={item.href}>
-            <Link href={item.href} className="flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-cream">
+            <Link href={item.href} className="flex min-h-14 items-center gap-3 px-4 py-3 text-ink hover:bg-cream">
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] font-semibold text-ink">{item.label}</span>
                 <span className="block text-sm text-muted">{item.hint}</span>
