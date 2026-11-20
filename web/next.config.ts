@@ -24,6 +24,21 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [{ source: "/", destination: "/home", permanent: false }];
   },
+  // The service worker (public/sw.js) must never be cached, so a new
+  // version reaches phones on their next visit. It may only load scripts
+  // from this site.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

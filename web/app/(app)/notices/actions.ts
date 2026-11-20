@@ -9,6 +9,7 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { aucklandDate } from "@/lib/dates";
 import { validateNotice, type NoticeForm } from "@/lib/notices";
 import { notifyNewNotice } from "@/lib/notify";
@@ -80,8 +81,9 @@ export async function saveNotice(prev: NoticeFormState, formData: FormData): Pro
   const { data, error } = await supabase.from("notices").insert(values).select("id").single();
   if (error || !data) return { seq, message: readable(error ?? { message: "no id" }, "post"), values: typed };
 
-  // Slice 7 hook: phone notifications for new notices.
-  await notifyNewNotice({ id: data.id, title: values.title, siteIds: values.site_ids, needsAck: values.needs_ack });
+  // Phone notifications, after the response is sent so posting stays quick.
+  const posted = { id: data.id as string, title: values.title, siteIds: values.site_ids, needsAck: values.needs_ack, postedBy: userId };
+  after(() => notifyNewNotice(posted));
 
   refresh();
   redirect(`/notices/${data.id}`);

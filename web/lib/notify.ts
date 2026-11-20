@@ -1,23 +1,61 @@
-// Phone notifications. Nothing is sent yet: this is the hook slice 7 fills in.
+// Phone notifications for things that just happened. Each hook is called by
+// a server action AFTER its database change succeeded under the person's
+// own session, so a failed save never notifies anyone, and only people the
+// database allowed to post / publish / decide can trigger one.
 //
-// Called by the "New notice" server action AFTER the notice is saved, so a
-// failed save never notifies anyone. Editing a notice doesn't notify.
+// Who gets them, and the wording, are in lib/reminders.ts (tested). The
+// sending is lib/push.ts. None of these ever throw: a failed push must never
+// fail the post, publish or decision.
+//
+// Scheduled reminders (fridge, opening checks, the 17:00 digest, shift
+// tomorrow) are in app/api/cron/reminders/route.ts.
+
+import "server-only";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { audienceFor, RECENT_SITE_DAYS } from "@/lib/notices";
+import { sendToPeople } from "@/lib/push";
+import { leaveDecidedMessage, noticeMessage, rosterMessage } from "@/lib/reminders";
+
+function logFailure(what: string, error: unknown) {
+  console.error(`Could not send ${what} notifications:`, (error as Error)?.message ?? error);
+}
 
 export type NewNoticeAlert = {
   id: string;
   title: string;
-  /** null = everyone; otherwise send to people who chose these sites recently
+  /** null = everyone; otherwise people who chose these sites recently
    *  (audienceFor in lib/notices.ts has the rule). */
   siteIds: string[] | null;
   needsAck: boolean;
+  postedBy: string;
 };
 
-/** Tell the notice's audience that a new notice is up. */
+/** "New notice: <title>" to the notice's audience, opening /notices/<id>.
+ *  Editing a notice doesn't notify. */
 export async function notifyNewNotice(notice: NewNoticeAlert): Promise<void> {
-  // TODO(slice 7): send a push notification ("New notice: <title>", opening
-  // /notices/<id>) to everyone in the audience who has turned notifications
-  // on. Never let a failed push fail the post: catch and log here.
-  void notice;
+  try {
+    const admin = createAdminClient();
+    const since = new Date(Date.now() - RECENT_SITE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: people }, { data: choices }] = await Promise.all([
+      admin.from("staff").select("id, name, active"),
+      notice.siteIds
+        ? admin.from("shifts").select("staff_id, site_id, clock_in").in("site_id", notice.siteIds).gt("clock_in", since)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const audience = audienceFor(
+      { site_ids: notice.siteIds, posted_by: notice.postedBy },
+      (people ?? []) as { id: string; name: string; active: boolean }[],
+      (choices ?? []) as { staff_id: string; site_id: string; clock_in: string }[],
+    );
+    await sendToPeople(
+      audience.map((p) => p.id),
+      "notices",
+      noticeMessage(notice),
+    );
+  } catch (error) {
+    logFailure("notice", error);
+  }
 }
 
 export type RosterPublishedAlert = {
@@ -27,18 +65,44 @@ export type RosterPublishedAlert = {
   weekStart: string;
   /** Everyone rostered that week at that site. */
   staffIds: string[];
-  /** false: first publish ("Your shifts for the week of ... are up").
+  /** false: first publish ("Your shifts ... are up").
    *  true: a published week changed and was published again ("Your shifts changed"). */
   republished: boolean;
 };
 
-/** Tell the people on a week's roster that it has been published, or that a
- *  published week has changed. Called by the roster's Publish / Re-publish
- *  action AFTER publish_roster_week succeeds. */
+/** Tell the people on a week's roster that it's up, or that it changed. */
 export async function notifyRosterPublished(alert: RosterPublishedAlert): Promise<void> {
-  // TODO(slice 7): push "Your shifts for the week of <date> are up" (or
-  // "Your shifts changed") to each person in staffIds who has turned
-  // notifications on, opening /time. Never let a failed push fail the
-  // publish: catch and log here.
-  void alert;
+  if (alert.staffIds.length === 0) return;
+  try {
+    const admin = createAdminClient();
+    const { data: site } = await admin.from("sites").select("name").eq("id", alert.siteId).maybeSingle();
+    await sendToPeople(
+      alert.staffIds,
+      "roster",
+      rosterMessage({ weekStart: alert.weekStart, siteName: (site?.name as string) ?? "your site", republished: alert.republished }),
+    );
+  } catch (error) {
+    logFailure("roster", error);
+  }
+}
+
+/** "Your sick leave for Fri 20 Nov was approved" to the person who asked.
+ *  Not when the owner decides their own. */
+export async function notifyLeaveDecided(requestId: string, decidedBy: string): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("leave_requests")
+      .select("id, staff_id, status, start_date, end_date")
+      .eq("id", requestId)
+      .maybeSingle();
+    if (!data || data.status === "pending" || data.staff_id === decidedBy) return;
+    await sendToPeople(
+      [data.staff_id as string],
+      "approvals",
+      leaveDecidedMessage(data as { id: string; status: "approved" | "declined"; start_date: string; end_date: string }),
+    );
+  } catch (error) {
+    logFailure("leave", error);
+  }
 }

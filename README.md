@@ -98,7 +98,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Confirmed wording is locked** (sixteenth migration): once anyone has acknowledged a notice, its title and text can't be edited, even by the owner or from the SQL editor ("People have already confirmed this notice. Archive it and post a new one."). This holds even if Needs acknowledgement is turned off later. Pin, expiry, audience and archiving can still change, and notices nobody has acknowledged stay fully editable. The edit form shows the title and text read-only with that explanation.
   - **Never deleted:** no delete grants, and a trigger refuses deletes. Only the managers' columns can be written; `posted_by` and `posted_at` are fixed.
   - The rules for the audience, unread counts, read counts, form checks and expiry are in `web/lib/notices.ts`, with tests.
-  - **Phone notifications:** `notifyNewNotice()` in `web/lib/notify.ts` is called after a new notice is saved. It does nothing yet (TODO for slice 7).
+  - **Phone notifications:** a new notice is pushed to its audience (see Phone notifications). Editing doesn't notify.
 - **More menu** (`/more`): Notices, Leave, Training, Settings and Sign out. Managers also see Roster, Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Timesheets** (`/time`, eleventh migration): hours are entered by hand, not clocked.
@@ -120,8 +120,24 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Warnings, not blocks** (`roster_warnings()`): someone on approved leave that day, or over 40 paid hours rostered in the week across all sites. The 40 is also `OVER_HOURS_LIMIT` in `web/lib/roster.ts`; a unit test reads the migration so they can't differ.
   - **Staff:** "My shifts" on Home (next shift up top) and on Time (this week and next), each with "Who's on with me".
   - **Timesheet approval:** each timesheet waiting shows the rostered shift for that person, day and site (published weeks only), and flags a start or finish more than 15 minutes away, or "Not rostered".
-  - **Phone notifications:** `notifyRosterPublished()` in `web/lib/notify.ts` is called after a publish or re-publish. It does nothing yet (TODO for slice 7).
+  - **Phone notifications:** publishing pushes "Your shifts at Cafe for the week of Mon 23 Nov are up" to everyone on that week; re-publishing pushes "Your shifts changed".
   - The week dates, form checks, totals, warning text and the rostered-vs-actual comparison are in `web/lib/roster.ts`, with tests.
+- **Phone notifications and reminders** (`/settings`, eighteenth migration): standard Web Push, no app store.
+  - **Turning them on:** Settings > Notifications > "Turn on notifications". The browser asks for permission only after that tap (iPhone requires it). It registers `public/sw.js`, subscribes with the VAPID public key and saves the subscription (`save_push_subscription`). "Send me a test" pushes to every device you've turned on. On iPhone, Safari only offers notifications to the app added to the Home Screen, so Settings says so and links to `/install`.
+  - **Four switches**, for every device: Notices, Roster (published or changed, and the evening before a shift), Reminders (fridge, opening checks) and Approvals (your leave decided; managers: things waiting). No `notification_prefs` row means all on.
+  - **Sent straight away** (`web/lib/notify.ts`, run with `after()` so the action doesn't wait): a new notice to its audience, a roster published or re-published to the people on that week, leave approved or declined to the person.
+  - **Scheduled reminders** (Auckland time, `web/lib/reminders.ts`):
+    - 10:00: "Fridge temperatures not done yet at <site>" to the people who chose that site today. From 11:00, managers hear about every site open today (someone chose it) that's still missing them.
+    - Opening checks not done 30 minutes after the site's opening time (`sites.opens_at`, default 9:00; managers change it in Settings > Opening times).
+    - 17:00: managers get "3 timesheets and 1 leave request waiting" (not counting their own, except the owner). Nothing waiting, nothing sent.
+    - 19:00: "You're on tomorrow 9:00 am to 5:00 pm at Cafe" for shifts in published weeks.
+    - Each has a window (fridge until 14:00, opening checks until 3 hours after opening, digest until 20:00, shift tomorrow until 22:00), so a late run never sends a stale reminder.
+  - **Never twice:** `sent_notifications` has a unique key per person, type and Auckland day (`reminderKey`). The job claims the key before sending, so overlapping runs can't both send. If every push to that person failed for a passing reason, the claim is removed and the next run tries again.
+  - **The scheduler:** Supabase `pg_cron` runs `run_reminders()` every 5 minutes. It uses `pg_net` to POST to `/api/cron/reminders` with `Authorization: Bearer <CRON_SECRET>`. The URL and secret live in Supabase Vault (`set_reminder_settings`), never in a migration. The route answers 401 without the right secret (timing-safe compare). Replies are kept for a few hours in `net._http_response`, and runs in `cron.job_run_details`.
+    - Why this one: it works the same locally and hosted, and pg_cron and pg_net are on Supabase's free plan. One copy of the rules, in TypeScript next to `web-push`. Vercel Hobby cron only runs once a day, GitHub Actions schedules are often late, and an Edge Function would mean a second copy of the rules in Deno.
+  - **Shared devices:** one browser belongs to one person. Turning notifications on takes the browser over from whoever had it, and Sign out removes this device's subscription first.
+  - **Tidy up:** subscriptions the push service says are gone (404/410) are deleted. Turned-off accounts get nothing. Push addresses and keys are stripped from the audit log.
+  - **Who can do what:** staff see and remove only their own subscriptions and switches. Only the job writes `sent_notifications`. Only managers change opening times. The API can't call `run_reminders` or `set_reminder_settings`.
 - **Bottom navigation**: Home, Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests in `web/lib/*.test.ts` for:
@@ -133,8 +149,9 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - staff accounts (statuses, invite checks) and password rules
   - notices (audience, inbox, read counts, form checks, expiry dates)
   - rosters (week dates, the shift form, totals, warnings, next shift, rostered vs actual)
+  - reminders (Auckland clock in summer and winter, every reminder's window and audience, switches, keys, message wording)
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), notifications (own subscriptions and switches only, a shared browser moves to the new person, the reminders log is job-only and unique, opening times are manager only, the scheduler functions can't be called through the API, no push keys in the audit log), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -169,7 +186,22 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
    SUPABASE_SECRET_KEY=...              # Secret key: server only, for invites and turning accounts off
    ```
 
-   Never add `NEXT_PUBLIC_` to the secret key. That prefix copies a value into the code sent to every browser, and the secret key skips all row-level security. Invite and password-reset emails land in Mailpit at http://127.0.0.1:54324.
+   For phone notifications, also add these (one time). Generate the keys with `npx web-push generate-vapid-keys` in `web/`, and the secret with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`:
+
+   ```
+   NEXT_PUBLIC_VAPID_PUBLIC_KEY=...     # public: the browser needs it to subscribe
+   VAPID_PRIVATE_KEY=...                # server only: signs every push
+   VAPID_SUBJECT=mailto:you@example.com # who to contact about the pushes
+   CRON_SECRET=...                      # server only: at least 32 characters
+   ```
+
+   Then tell the local database where to send the reminders check (one time; it's kept in Vault and survives restarts):
+
+   ```powershell
+   docker exec supabase_db_chutneys-ops psql -U postgres -d postgres -c "select set_reminder_settings('http://host.docker.internal:3000/api/cron/reminders', '<your CRON_SECRET>');"
+   ```
+
+   Never add `NEXT_PUBLIC_` to the secret key, the VAPID private key or the cron secret. That prefix copies a value into the code sent to every browser, and the secret key skips all row-level security. Invite and password-reset emails land in Mailpit at http://127.0.0.1:54324.
 7. `cd web` then `npm run dev`, and open http://localhost:3000. Studio (the database UI) is at http://localhost:54323.
 8. Before pushing: `npm test` and `npm run lint` in `web/`, and `npx supabase test db` in the root.
 9. End of day: `npx supabase stop`.
@@ -203,7 +235,6 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - **Notices:**
   - **The 30-day rule lives in two places:** `my_recent_site_ids()` in the database and `RECENT_SITE_DAYS` in `web/lib/notices.ts` (for the managers' read counts). A unit test reads the migration and fails if they differ.
   - **Audit log size:** every read and acknowledgement is an audit row (all tables are audited). Fine for a small team; revisit with the audit retention decision.
-  - **Push notifications:** slice 7 fills in `notifyNewNotice()`.
 - **Rosters:**
   - **Edits show straight away:** staff see changes to a published week as soon as a manager saves them, before Re-publish. "Changed since published" only tells the manager to re-publish (and, from slice 7, to notify). Keep a published snapshot if half-finished edits turn out to confuse people.
   - **Pending leave** doesn't warn, only approved leave. Add it if managers want an earlier heads-up.
@@ -229,7 +260,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - **Xero:** push purchases as bills instead of the CSV once the Xero connection exists.
 - **Home and the app:**
   - **Real logo:** replace the placeholder in `web/lib/brand/app-icon.tsx`. The image renderer's built-in font has no bold, so a real logo image will look better than the letter.
-  - **Offline:** there's no service worker, so the installed app needs a connection. Chrome no longer requires one to install. Add one later if trucks need to work offline.
+  - **Offline:** the service worker (`public/sw.js`) only handles notifications, so the installed app still needs a connection. Chrome no longer requires one to install. Add one later if trucks need to work offline.
   - **Android install button:** Chrome can offer a one-tap "Install" through the `beforeinstallprompt` event. The guide currently shows the menu steps instead.
 - **Timesheets:**
   - **Agreed break arrangements per person:** the Employment Relations Act lets an employer and employee agree different break times, or compensation instead of breaks. Everyone gets the default Employment NZ table for now. Add a per-person arrangement (for example a 45-minute unpaid meal, or a paid meal break) for `nz_breaks` or the paid-minutes trigger to use.
@@ -245,6 +276,14 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - ~~**Per-unit min/max.**~~ Done: `"range_from": "unit"` on a number field uses the chosen unit's own limits.
   - **Photos:** attach a photo to an entry (for example a probe reading or a delivery label).
   - **Confirm templates with the owner:** the 13 record templates in `seed.sql` are drafts based on a typical Food Control Plan.
+
+- **Notifications:**
+  - **Hosted setup before go-live:** add the four env vars (VAPID keys, `VAPID_SUBJECT`, `CRON_SECRET`) to the host, then run `select set_reminder_settings('https://<your domain>/api/cron/reminders', '<CRON_SECRET>');` once in the hosted SQL editor. iPhone testing needs this HTTPS deploy.
+  - **Free Supabase projects pause** after a week without activity, and paused means no reminders. Daily use keeps it awake.
+  - **Audit log size:** every reminder sent is an audit row (`sent_notifications` is audited, like every table). Revisit with the audit retention decision.
+  - **Not yet notified:** new leave requests and vomiting/diarrhoea reports to managers (the 17:00 digest counts pending leave), out-of-range readings, closing checks.
+  - **Opening times** are one time per site for every day. Add per-weekday times if trucks keep different hours.
+  - **Sign-out:** only the More menu's Sign out removes the device. A session that simply expires keeps the device until the next person turns notifications on there.
 
 ## Design plan
 
@@ -323,7 +362,9 @@ Owner answers (fill in after the meeting):
 - When you add a table, also give it friendly names in `web/lib/audit.ts` (area, thing, any new columns) so the audit page reads well.
 - **A new table with rows about a person** (who did it, or who it's for) also gets the `active_staff_only` trigger, for example `create trigger active_staff_only before insert on stock_counts for each row execute function active_staff_only('counted_by', 'stock counts');`.
 - **Every new table must also call `enable_active_only()`**, for example `select enable_active_only('stock_counts');`, so turned-off accounts can't read or write it. `supabase/tests/staff_accounts.test.sql` fails if a table in `public` is missing it.
-- **The secret key (`SUPABASE_SECRET_KEY`) is only used in `web/lib/supabase/admin.ts`**, which imports `server-only`. Check the caller is an active owner with their own session *before* using it.
+- **The secret key (`SUPABASE_SECRET_KEY`) is only used in `web/lib/supabase/admin.ts`**, which imports `server-only`. Check the caller is an active owner with their own session *before* using it. Two other callers, each checked a different way:
+  - `web/lib/notify.ts`, only after the action's own database call succeeded under the person's session (that success proves they were allowed to post, publish or decide);
+  - `/api/cron/reminders`, only after it checked `CRON_SECRET`.
 
 - Real Chutneys data never goes in this repo. Use the sample seed data only.
 - Secrets (Supabase keys, Slack webhooks) go in `.env`, which is git-ignored.

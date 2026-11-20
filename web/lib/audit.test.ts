@@ -354,3 +354,37 @@ test("describeAudit: notice reads", () => {
     'Acknowledged "Gas bottles"',
   );
 });
+
+test("what happened: notifications and opening times", () => {
+  assert.equal(areaLabel("push_subscriptions"), "Notification devices");
+  assert.equal(areaLabel("sent_notifications"), "Reminders sent");
+  assert.equal(columnLabel("sites", "opens_at"), "Opens at");
+  assert.equal(columnLabel("sent_notifications", "kind"), "Reminder");
+  assert.equal(
+    describeAudit(
+      entry({
+        table_name: "sites",
+        action: "update",
+        old_data: { name: "Cafe", opens_at: "09:00:00" },
+        new_data: { name: "Cafe", opens_at: "07:30:00" },
+        changed_fields: ["opens_at"],
+      }),
+    ),
+    "Changed Cafe's opening time to 07:30",
+  );
+  assert.equal(
+    describeAudit(entry({ table_name: "push_subscriptions", new_data: { staff_id: ANA } }), lookups),
+    "Turned on notifications on a device",
+  );
+  assert.equal(
+    describeAudit(entry({ table_name: "notification_prefs", action: "update", new_data: { roster: false }, changed_fields: ["roster"] })),
+    "Changed notification settings",
+  );
+  assert.equal(
+    describeAudit(
+      entry({ table_name: "sent_notifications", actor_id: null, new_data: { staff_id: ANA, kind: "fridge_staff" } }),
+      lookups,
+    ),
+    "Sent Ana the fridge temperatures reminder",
+  );
+});
