@@ -11,7 +11,8 @@ import { ChangePasswordForm } from "./password-form";
 import { PinForm } from "./pin-form";
 
 // Settings (from the More menu): notifications, change password, your
-// sign-off PIN (managers and owner) and sites' opening times (managers).
+// sign-off PIN (managers and owner) and sites' opening times and trading
+// days (managers).
 // Sign out is on the More menu; shift controls live in the header (Change site).
 export default async function SettingsPage() {
   await connection();
@@ -24,7 +25,7 @@ export default async function SettingsPage() {
   const [{ data: prefRow }, { data: sites }] = await Promise.all([
     supabase.from("notification_prefs").select("notices, roster, reminders, approvals").maybeSingle(),
     manager
-      ? supabase.from("sites").select("id, name, opens_at").eq("active", true).order("name")
+      ? supabase.from("sites").select("id, name, opens_at, trading_days").eq("active", true).order("name")
       : Promise.resolve({ data: null }),
   ]);
 
@@ -69,12 +70,13 @@ export default async function SettingsPage() {
 
       {manager && sites && sites.length > 0 && (
         <section className="mt-5 rounded-[14px] border border-line bg-white p-4">
-          <h2 className="text-lg font-semibold">Opening times</h2>
+          <h2 className="text-lg font-semibold">Opening times and trading days</h2>
           <p className="mt-1 mb-4 text-sm text-muted">
-            When each site usually opens. If the opening checks aren&apos;t done 30 minutes later, the people
-            at that site get a reminder.
+            When each site usually opens, and the days it trades. If the opening checks aren&apos;t done 30
+            minutes after opening, the people at that site get a reminder. On days a site doesn&apos;t trade there
+            are no fridge or opening-check reminders, and the verifier pack shows those days as closed.
           </p>
-          <OpeningTimesForm sites={sites as { id: string; name: string; opens_at: string }[]} />
+          <OpeningTimesForm sites={sites as { id: string; name: string; opens_at: string; trading_days: number[] | null }[]} />
         </section>
       )}
     </main>

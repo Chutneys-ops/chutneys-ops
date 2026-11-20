@@ -99,7 +99,12 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Never deleted:** no delete grants, and a trigger refuses deletes. Only the managers' columns can be written; `posted_by` and `posted_at` are fixed.
   - The rules for the audience, unread counts, read counts, form checks and expiry are in `web/lib/notices.ts`, with tests.
   - **Phone notifications:** a new notice is pushed to its audience (see Phone notifications). Editing doesn't notify.
-- **More menu** (`/more`): Notices, Leave, Training, Settings and Sign out. Managers also see Roster, Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
+- **More menu** (`/more`): Notices, Leave, Training, Settings and Sign out. Managers also see Roster, Leave requests, Staff sickness, Training matrix and Verifier pack; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
+- **Trading days** (twentieth migration): `sites.trading_days` lists the ISO weekdays each site trades (1 = Monday ... 7 = Sunday), default every day.
+  - Managers and the owner set them in Settings > Opening times and trading days (Mon to Sun toggles next to each site's opening time) through `set_site_trading_days()`. It sorts the days and removes repeats. Sites have no update policy, so it's the only way in.
+  - A check (`valid_trading_days`) holds even in the SQL editor: at least one day (a site that never trades is turned off instead), only 1 to 7, and no repeats.
+  - On a non-trading day there are no fridge or opening-check reminders, and the verifier pack shows CLOSED instead of NO RECORD. Entries made on a closed day still show as normal.
+  - The rules are in `web/lib/trading-days.ts`, with tests (one reads the migration's default).
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Timesheets** (`/time`, eleventh migration): hours are entered by hand, not clocked.
   - **Add my hours:** date, site, start and finish. A finish earlier than the start means the next morning. A live preview shows, for example, "7 h at work, 2 x 10 min paid rest, 1 x 30 min meal, 6.5 h paid".
@@ -128,7 +133,8 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Sent straight away** (`web/lib/notify.ts`, run with `after()` so the action doesn't wait): a new notice to its audience, a roster published or re-published to the people on that week, leave approved or declined to the person.
   - **Scheduled reminders** (Auckland time, `web/lib/reminders.ts`):
     - 10:00: "Fridge temperatures not done yet at <site>" to the people who chose that site today. From 11:00, managers hear about every site open today (someone chose it) that's still missing them.
-    - Opening checks not done 30 minutes after the site's opening time (`sites.opens_at`, default 9:00; managers change it in Settings > Opening times).
+    - Opening checks not done 30 minutes after the site's opening time (`sites.opens_at`, default 9:00; managers change it in Settings > Opening times and trading days).
+    - Fridge and opening-check reminders only go out on the site's trading days (see Trading days).
     - 17:00: managers get "3 timesheets and 1 leave request waiting" (not counting their own, except the owner). Nothing waiting, nothing sent.
     - 19:00: "You're on tomorrow 9:00 am to 5:00 pm at Cafe" for shifts in published weeks.
     - Each has a window (fridge until 14:00, opening checks until 3 hours after opening, digest until 20:00, shift tomorrow until 22:00), so a late run never sends a stale reminder.
@@ -137,7 +143,32 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
     - Why this one: it works the same locally and hosted, and pg_cron and pg_net are on Supabase's free plan. One copy of the rules, in TypeScript next to `web-push`. Vercel Hobby cron only runs once a day, GitHub Actions schedules are often late, and an Edge Function would mean a second copy of the rules in Deno.
   - **Shared devices:** one browser belongs to one person. Turning notifications on takes the browser over from whoever had it, and Sign out removes this device's subscription first.
   - **Tidy up:** subscriptions the push service says are gone (404/410) are deleted. Turned-off accounts get nothing. Push addresses and keys are stripped from the audit log.
-  - **Who can do what:** staff see and remove only their own subscriptions and switches. Only the job writes `sent_notifications`. Only managers change opening times. The API can't call `run_reminders` or `set_reminder_settings`.
+  - **Who can do what:** staff see and remove only their own subscriptions and switches. Only the job writes `sent_notifications`. Only managers change opening times and trading days. The API can't call `run_reminders` or `set_reminder_settings`.
+- **Verifier pack** (More > Verifier pack, nineteenth migration): every food safety record for a date range as one PDF for the Auckland Council verifier, plus a monthly copy.
+  - **What's in it:**
+    - a cover (business, sites, dates, who made it and when, totals) and a contents list with page numbers;
+    - one part per site. In each part, one section per record with entries in the range, plus every record that must be done daily. Each day is a table: time, values with units, who recorded it, comments;
+    - out-of-range readings marked OUT OF RANGE with their corrective action;
+    - corrections and later readings (cooling, batter) right under the entry they belong to, and the sign-off (who, when) or NOT SIGNED OFF on each sheet;
+    - days with no entry for a daily record listed as NO RECORD, never hidden, counting only the site's trading days. Each says whether anyone chose that site that day. Days the site doesn't trade show as CLOSED (a thin solid box, so it never looks like a gap);
+    - supplier deliveries with arrival temperatures, maintenance, incidents and complaints (each appears only if it has entries);
+    - the staff sickness record (name, date sick, date cleared, cleared by; no reason, note, hours or certificate);
+    - training: everyone who chose a site or had a timesheet in the range (at the chosen site, for a one-site pack), each with all their training up to the end date, whenever it was given (topic, date, trainer, both confirmations). Someone with no training gets "No training recorded".
+  - **Format: a PDF made on the server** with `@react-pdf/renderer`, the same file on every phone and printer. We chose it over a print-ready HTML page:
+    - iPhone Safari doesn't print CSS page numbers;
+    - no browser can fill in "see page 7" in a contents list;
+    - the monthly job has no browser to print from.
+  - **How the PDF is drawn:**
+    - it's drawn twice. The first pass notes the page each heading lands on, and the second prints those numbers in the contents;
+    - it's readable in black and white: a thick bar, grey shading and words mark problems, never colour alone;
+    - the font is Inter, embedded from `web/assets/fonts/` (OFL licence), because the PDF's built-in fonts can't show macrons ("Māngere").
+  - **Who:** managers and the owner pick a site (or all sites) and up to 92 days. The page shows a summary (entries, out of range, days with no record, sheets not signed off), then Open PDF or Download. `/more/verifier-pack/pdf` returns 403 to anyone else and reads everything with the caller's own session, so RLS decides what's in the pack.
+  - **Monthly copy:**
+    - pg_cron runs `run_verifier_pack()` every day at 14:30 UTC (2:30 or 3:30 am in Auckland). It posts to `/api/cron/verifier-pack` with the same `CRON_SECRET` as reminders, and reuses the reminders URL in Vault with the path swapped, so there's nothing new to set up;
+    - the route builds last month's all-sites pack only if `verifier-packs/<year>/<year>-<month>.pdf` isn't there yet. So it's made on the 1st, a failed night is retried the next day, and a stored copy is never replaced;
+    - `verifier-packs` is a private bucket that only the owner can read (Storage policy). Only the server key writes, and nobody can change or delete a copy through the API;
+    - the owner downloads past copies from the same page, through a 5-minute signed link.
+  - The grouping, gap detection, contents and page numbering, and month and file names live in `web/lib/verifier-pack.ts`, with tests. Loading (paged past the 1,000-row limit) is in `web/lib/supabase/verifier-pack.ts`; drawing is in `web/lib/verifier-pack-pdf.tsx`. The cron secret check is shared with reminders in `web/lib/cron-auth.ts`.
 - **Bottom navigation**: Home, Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests in `web/lib/*.test.ts` for:
@@ -149,9 +180,11 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - staff accounts (statuses, invite checks) and password rules
   - notices (audience, inbox, read counts, form checks, expiry dates)
   - rosters (week dates, the shift form, totals, warnings, next shift, rostered vs actual)
-  - reminders (Auckland clock in summer and winter, every reminder's window and audience, switches, keys, message wording)
+  - trading days (weekdays across daylight saving, the form checks, the wording, and the default matching the migration)
+  - reminders (no fridge or opening-check reminders on a non-trading day; Auckland clock in summer and winter, every reminder's window and audience, switches, keys, message wording)
+  - the verifier pack (date ranges and months, rows with corrections and later readings, per-unit limits, gaps from the day a site was added, trading days and CLOSED days, closed and new sites, sickness rows with no medical details, training to date for everyone who worked, contents pages and page numbers)
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), notifications (own subscriptions and switches only, a shared browser moves to the new person, the reminders log is job-only and unique, opening times are manager only, the scheduler functions can't be called through the API, no push keys in the audit log), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), notifications (own subscriptions and switches only, a shared browser moves to the new person, the reminders log is job-only and unique, opening times are manager only, the scheduler functions can't be called through the API, no push keys in the audit log), trading days (only managers and the owner change them, never directly; at least one day, 1 to 7, no repeats, even from the SQL editor), verifier packs (only the owner reads the monthly copies; nobody uploads, changes or deletes them through the API; the scheduler can't be called through the API and runs daily), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -272,11 +305,21 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - ~~**PIN lockout.**~~ Done: 5 wrong PINs lock sign-off for 15 minutes. `sign_off_sheet` returns a status (`ok`, `wrong_pin`, `locked`) instead of raising for a wrong PIN, because a raised exception would roll back the saved attempt count.
   - **Unlock early:** an owner can't clear a manager's lock yet; they wait 15 minutes or set a new PIN. Add an owner-only unlock if that's too slow in practice.
   - **Browse past days:** managers and the owner can pick a date on `/records`. Staff only see today (plus yesterday's unfinished cooling and batter records). A history view for staff could come later.
-  - **Export for the inspector:** a printable or PDF view of a date range for MPI or council verification.
+  - ~~**Export for the inspector.**~~ Done: More > Verifier pack.
   - ~~**Per-unit min/max.**~~ Done: `"range_from": "unit"` on a number field uses the chosen unit's own limits.
   - **Photos:** attach a photo to an entry (for example a probe reading or a delivery label).
   - **Confirm templates with the owner:** the 13 record templates in `seed.sql` are drafts based on a typical Food Control Plan.
 
+- **Verifier pack:**
+  - **Hosted setup:** nothing extra beyond the reminders setup. The migration creates the bucket and the schedule. The PDF routes set `maxDuration` (60 s on demand, 300 s monthly); check the host's plan allows them.
+  - ~~**Closed days count as gaps.**~~ Done: trading days per site (Settings). Non-trading days show CLOSED.
+  - **Trading days have no history:** only the current setting is kept. Changing a truck's days also changes how earlier days look in a pack made later (a past CLOSED day can become NO RECORD, or the other way). Stored monthly copies keep what was true when they were made. If that matters, keep dated changes (a `site_trading_days` history table) and look up the setting for each date.
+  - **One-off closures:** public holidays or a truck off the road for repairs still count as trading days. Add closed dates per site if verifiers ask.
+  - **Home's "Due today"** still lists daily records on a non-trading day for someone who chose that site. They're working there anyway, so it's left as is; use `isTradingDay` there if it confuses people.
+  - **Late corrections:** the monthly copy is made on the 1st and never replaced. A correction to last month added later is in the database and in packs made on demand, not in the stored copy.
+  - ~~**Training only in the range.**~~ Done: everyone who worked in the range, with all their training to date.
+  - **Training refreshers:** the pack lists every record but doesn't say which are out of date. Add refresher periods per topic (see Training) and mark overdue ones.
+  - **Keeping copies:** monthly copies are kept forever. Decide with the owner how long to keep them (food control plan records: at least 4 years).
 - **Notifications:**
   - **Hosted setup before go-live:** add the four env vars (VAPID keys, `VAPID_SUBJECT`, `CRON_SECRET`) to the host, then run `select set_reminder_settings('https://<your domain>/api/cron/reminders', '<CRON_SECRET>');` once in the hosted SQL editor. iPhone testing needs this HTTPS deploy.
   - **Free Supabase projects pause** after a week without activity, and paused means no reminders. Daily use keeps it awake.

@@ -13,8 +13,8 @@
 //   4. sends the new ones. If every push to a person failed for a passing
 //      reason (not "gone"), the claim is removed so the next run tries again.
 
-import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { cronAuthorised } from "@/lib/cron-auth";
 import { aucklandDate } from "@/lib/dates";
 import { deliver, loadSubscriptions, pushConfigured, type Subscription } from "@/lib/push";
 import {
@@ -30,21 +30,6 @@ import {
 } from "@/lib/reminders";
 import { STALE_HOURS } from "@/lib/hours";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-/** Constant-time compare (hashing first makes the lengths equal). */
-function secretMatches(given: string, expected: string): boolean {
-  const a = createHash("sha256").update(given).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
-}
-
-function authorised(request: NextRequest): boolean {
-  const expected = process.env.CRON_SECRET;
-  if (!expected || expected.length < 32) return false; // not set up: refuse everything
-  const header = request.headers.get("authorization") ?? "";
-  const given = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
-  return given.length > 0 && secretMatches(given, expected);
-}
 
 /** For local testing only: {"now": "2026-11-20T10:05:00+13:00"} pretends
  *  it's that time. Ignored in production. */
@@ -65,7 +50,7 @@ async function gather(admin: Admin, now: Date): Promise<ReminderData> {
   const today = aucklandDate(now);
   const staleBefore = new Date(now.getTime() - STALE_HOURS * 60 * 60 * 1000).toISOString();
   const [sites, templates, sheets, choices, people, prefs, subs, timesheets, leave, tomorrow] = await Promise.all([
-    admin.from("sites").select("id, name, kind, opens_at").eq("active", true),
+    admin.from("sites").select("id, name, kind, opens_at, trading_days").eq("active", true),
     admin.from("record_templates").select("code, site_kinds").eq("active", true),
     admin.from("record_sheets").select("site_id, template_code, record_entries(count)").eq("sheet_date", today),
     admin.from("shifts").select("staff_id, site_id, clock_in").is("clock_out", null).gt("clock_in", staleBefore),
@@ -103,7 +88,7 @@ async function gather(admin: Admin, now: Date): Promise<ReminderData> {
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorised(request)) {
+  if (!cronAuthorised(request)) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
   if (!pushConfigured()) {

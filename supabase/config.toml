@@ -148,6 +148,14 @@ public = false
 file_size_limit = "1MiB"
 allowed_mime_types = ["image/png"]
 
+# Monthly copies of the verifier pack (PDF). Private: only the owner reads
+# them, only the server writes. The migration
+# 20261205000000_verifier_packs.sql also creates it (for the hosted project).
+[storage.buckets.verifier-packs]
+public = false
+file_size_limit = "50MiB"
+allowed_mime_types = ["application/pdf"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

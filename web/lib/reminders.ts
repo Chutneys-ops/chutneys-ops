@@ -8,6 +8,7 @@ import { aucklandDate } from "./dates.ts";
 import { STALE_HOURS } from "./hours.ts";
 import { dateRangeText, shortYmd } from "./leave.ts";
 import { addDays, clockText, shiftTimesText } from "./roster.ts";
+import { isTradingDay } from "./trading-days.ts";
 
 // ---- Switches ------------------------------------------------------------------------
 
@@ -112,7 +113,14 @@ export function reminderKey(kind: ReminderKind, staffId: string, ymd: string): s
 
 // ---- Working out the reminders -----------------------------------------------------------
 
-export type SiteLite = { id: string; name: string; kind: string; opens_at: string };
+export type SiteLite = {
+  id: string;
+  name: string;
+  kind: string;
+  opens_at: string;
+  /** ISO weekdays it trades (sites.trading_days); null or missing = every day. */
+  trading_days?: number[] | null;
+};
 export type TemplateForReminders = { code: string; site_kinds: string[] };
 export type PersonLite = { id: string; name: string; role: "staff" | "manager" | "owner"; active: boolean };
 /** An open site choice (shifts row with clock_out null). */
@@ -228,9 +236,13 @@ export function dueReminders(now: Date, data: ReminderData): Reminder[] {
     out.push({ kind, staffId, forDate: today, key, title, body, url });
   };
 
+  // Fridge and opening-check reminders only go out for sites trading today
+  // (sites.trading_days): nothing is expected on the days a site is closed.
+  const trading = data.sites.filter((s) => isTradingDay(s.trading_days, today));
+
   // Fridge temperatures: from 10:00, to people at a site where they're not done.
   const fridgeMissing = fridgeTemplate
-    ? data.sites.filter((s) => fridgeTemplate.site_kinds.includes(s.kind) && !isDone(s.id, FRIDGE_CODE))
+    ? trading.filter((s) => fridgeTemplate.site_kinds.includes(s.kind) && !isDone(s.id, FRIDGE_CODE))
     : [];
   if (inWindow(minutes, WINDOWS.fridgeStaff)) {
     for (const site of fridgeMissing) {
@@ -260,7 +272,7 @@ export function dueReminders(now: Date, data: ReminderData): Reminder[] {
   }
 
   // Opening checks: 30 minutes after the site's opening time.
-  for (const site of data.sites) {
+  for (const site of trading) {
     const code = openingTemplateFor(site.kind, data.templates);
     if (!code || isDone(site.id, code)) continue;
     const opens = timeToMinutes(site.opens_at || DEFAULT_OPENS_AT);

@@ -71,6 +71,7 @@ export default async function MorePage() {
     { href: "/leave/requests", label: "Leave requests", hint: "Approve or decline sick leave" },
     { href: "/leave/sickness", label: "Staff sickness", hint: "Food safety record, clear to return" },
     { href: "/training/matrix", label: "Training matrix", hint: "Who is trained in what" },
+    { href: "/more/verifier-pack", label: "Verifier pack", hint: "All food safety records as a PDF for the verifier" },
   ];
   if (me.role === "owner") {
     managing.unshift({ href: "/more/staff", label: "Staff", hint: "Invite people, change roles, turn off leavers" });

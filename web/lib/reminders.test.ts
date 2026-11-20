@@ -218,6 +218,19 @@ test("opening checks done: no reminder; window closes 3 hours after opening", ()
   assert.equal(late.length, 0); // Cafe opened 7:00; 10:00 is past its window
 });
 
+test("no fridge or opening-check reminders at a site on a day it doesn't trade", () => {
+  // 20 Nov 2026 is a Friday. Truck 1 trades Saturday and Sunday only.
+  const sites = data().sites.map((s) => (s.id === TRUCK ? { ...s, trading_days: [6, 7] } : s));
+  const at1105 = dueReminders(nov("11:05"), data({ sites }, nov("11:05")));
+  assert.deepEqual(kinds(at1105.filter((r) => r.kind === "fridge_staff")), [`fridge_staff:${BEN}`]);
+  assert.equal(at1105.find((r) => r.kind === "fridge_manager")!.body, "Fridge temperatures not done yet at Cafe");
+  const at0930 = dueReminders(nov("09:30"), data({ sites }, nov("09:30"))).filter((r) => r.kind === "opening_checks");
+  assert.deepEqual(kinds(at0930), [`opening_checks:${BEN}`]);
+  // On Saturday it trades, so Ana is reminded again.
+  const sat = dueReminders(nov("10:05", 21), data({ sites }, nov("10:05", 21))).filter((r) => r.kind === "fridge_staff");
+  assert.ok(kinds(sat).includes(`fridge_staff:${ANA}`));
+});
+
 // ---- 17:00 digest -------------------------------------------------------------------------------
 
 test("waitingCounts: managers don't count their own; the owner counts everything", () => {
