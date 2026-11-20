@@ -8,8 +8,10 @@ import { pickMessage } from "@/lib/daily-messages";
 import { aucklandDate, aucklandDay } from "@/lib/dates";
 import { countCards, dueToday, firstName, greeting, sumPurchases, type TemplateLite } from "@/lib/home";
 import { weekStart } from "@/lib/hours";
+import { needsYou } from "@/lib/notices";
 import { LEAVE_STATUS_LABELS, dateRangeText, type LeaveStatus } from "@/lib/leave";
 import { currentMonth, formatMoney, monthLabel, monthRange } from "@/lib/purchases";
+import { loadMyInbox } from "@/lib/supabase/notices";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentShift, getSession, isManager } from "@/lib/supabase/session";
 
@@ -75,6 +77,7 @@ export default async function HomePage() {
     notSignedOffToday,
     staffToClear,
     purchases,
+    myNotices,
   ] = await Promise.all([
     supabase.rpc("needs_clearance"),
     shift
@@ -141,9 +144,12 @@ export default async function HomePage() {
         )
       : 0,
     owner ? purchasesThisMonth(supabase) : null,
+    loadMyInbox(supabase, userId),
   ]);
 
   const needsClearance = clearance.data === true;
+  // Unread, or waiting for your acknowledgement; already pinned first, then newest.
+  const waitingNotices = myNotices.items.filter(needsYou);
   const sheets = ((sheetsResult.data ?? []) as { template_code: string; record_entries: { count: number }[] }[]).map(
     (s) => ({ template_code: s.template_code, entry_count: s.record_entries[0]?.count ?? 0 }),
   );
@@ -160,6 +166,37 @@ export default async function HomePage() {
         {greeting(now)}, {firstName(me.name)}
       </h1>
       <p className="mt-1 text-sm text-muted">{aucklandDay(now)}</p>
+
+      {/* Notices waiting on you (hidden when there are none) */}
+      {waitingNotices.length > 0 && (
+        <section className="mt-4 rounded-[14px] border border-primary bg-primary-light p-4">
+          <h2 className="text-lg font-semibold text-primary-dark">Notices</h2>
+          <ul className="mt-1 divide-y divide-primary/20">
+            {waitingNotices.slice(0, 3).map((n) => (
+              <li key={n.id}>
+                <Link href={`/notices/${n.id}`} className="flex min-h-12 items-center gap-3 py-2 text-ink">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-semibold break-words">
+                      {n.pinned && <span className="sr-only">Pinned: </span>}
+                      {n.title}
+                    </span>
+                    <span className="block text-sm text-muted">
+                      {n.pinned ? "Pinned · " : ""}
+                      {n.read ? "Please acknowledge" : n.needs_ack ? "New · please acknowledge" : "New"}
+                    </span>
+                  </span>
+                  {chevron}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {waitingNotices.length > 3 && (
+            <Link href="/notices" className="mt-1 inline-flex min-h-12 items-center text-sm font-semibold text-primary hover:text-primary-dark">
+              See all {waitingNotices.length} notices
+            </Link>
+          )}
+        </section>
+      )}
 
       <InstallCard />
 

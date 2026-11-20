@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { logout } from "@/app/login/actions";
 import { NotStaff } from "@/components/not-staff";
+import { loadMyInbox } from "@/lib/supabase/notices";
 import { createClient } from "@/lib/supabase/server";
 import { getSession, isManager } from "@/lib/supabase/session";
 
 // The "More" tab: a menu. Managers and the owner get extra items; the
 // pages themselves check the role again (and the database checks it too).
 
-type Item = { href: string; label: string; hint: string };
+/** badge: a count shown in a green circle (hidden when 0). */
+type Item = { href: string; label: string; hint: string; badge?: number; badgeLabel?: string };
 
 function Menu({ title, items }: { title?: string; items: Item[] }) {
   return (
@@ -23,6 +25,14 @@ function Menu({ title, items }: { title?: string; items: Item[] }) {
                 <span className="block text-[15px] font-semibold text-ink">{item.label}</span>
                 <span className="block text-sm text-muted">{item.hint}</span>
               </span>
+              {item.badge ? (
+                <span
+                  aria-label={item.badgeLabel}
+                  className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-primary px-2 text-xs font-bold text-white"
+                >
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              ) : null}
               <svg aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 6l6 6-6 6" />
               </svg>
@@ -41,7 +51,17 @@ export default async function MorePage() {
   if (!userId) redirect("/login");
   if (!me) return <NotStaff />;
 
+  // Notices waiting on you: unread, or read but not acknowledged yet.
+  const { counts } = await loadMyInbox(supabase, userId);
+
   const mine: Item[] = [
+    {
+      href: "/notices",
+      label: "Notices",
+      hint: isManager(me) ? "Announcements: read, post and see who has read them" : "Announcements from your managers",
+      badge: counts.waiting,
+      badgeLabel: `${counts.waiting} ${counts.waiting === 1 ? "notice needs" : "notices need"} your attention`,
+    },
     { href: "/leave", label: "Leave", hint: "Request sick leave and see your requests" },
     { href: "/training", label: "Training", hint: "Your training records" },
     { href: "/settings", label: "Settings", hint: isManager(me) ? "Your password and sign-off PIN" : "Your password" },

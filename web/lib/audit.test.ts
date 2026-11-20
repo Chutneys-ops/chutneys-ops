@@ -283,3 +283,74 @@ test("change list: only the changed fields, before and after", () => {
   ]);
   assert.deepEqual(changeList(entry({ action: "insert", new_data: { a: 1 } })), []);
 });
+
+// ---- Notices ------------------------------------------------------------------------
+
+const NOTICE = "70000000-0000-0000-0000-000000000001";
+const withNotices: AuditLookups = { ...lookups, notices: { [NOTICE]: "Gas bottles" } };
+
+test("notices have friendly names", () => {
+  assert.equal(areaLabel("notices"), "Notices");
+  assert.equal(areaLabel("notice_reads"), "Notice reads");
+  assert.equal(columnLabel("notices", "edited_at"), "Edited at");
+  assert.equal(columnLabel("notices", "needs_ack"), "Needs acknowledgement");
+  assert.equal(formatAuditValue("site_ids", [SITE], lookups), "Truck - Sandringham");
+  assert.equal(formatAuditValue("site_ids", null, lookups), "(empty)");
+  assert.equal(formatAuditValue("posted_by", MIA, lookups), "Mia");
+});
+
+test("describeAudit: notices", () => {
+  const data = { id: NOTICE, title: "Gas bottles", archived_at: null };
+  assert.equal(
+    describeAudit(entry({ table_name: "notices", actor_id: MIA, new_data: data }), withNotices),
+    'Posted notice "Gas bottles"',
+  );
+  assert.equal(
+    describeAudit(
+      entry({
+        table_name: "notices",
+        action: "update",
+        old_data: data,
+        new_data: { ...data, archived_at: "2026-11-20T02:00:00Z" },
+        changed_fields: ["archived_at"],
+      }),
+      withNotices,
+    ),
+    'Archived notice "Gas bottles"',
+  );
+  assert.equal(
+    describeAudit(
+      entry({
+        table_name: "notices",
+        action: "update",
+        old_data: data,
+        new_data: { ...data, title: "Gas bottles", body: "x" },
+        changed_fields: ["body", "edited_at"],
+      }),
+      withNotices,
+    ),
+    'Edited notice "Gas bottles"',
+  );
+});
+
+test("describeAudit: notice reads", () => {
+  const readRow = { notice_id: NOTICE, staff_id: ANA, acknowledged_at: null };
+  assert.equal(
+    describeAudit(entry({ table_name: "notice_reads", new_data: readRow }), withNotices),
+    'Read "Gas bottles"',
+  );
+  assert.equal(describeAudit(entry({ table_name: "notice_reads", new_data: readRow }), lookups), "Read a notice");
+  assert.equal(
+    describeAudit(
+      entry({
+        table_name: "notice_reads",
+        action: "update",
+        old_data: readRow,
+        new_data: { ...readRow, acknowledged_at: "2026-11-20T02:00:00Z" },
+        changed_fields: ["acknowledged_at"],
+      }),
+      withNotices,
+    ),
+    'Acknowledged "Gas bottles"',
+  );
+});

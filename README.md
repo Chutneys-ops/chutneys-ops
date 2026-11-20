@@ -89,7 +89,17 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Audited: every table in `public` except `staff_pins` (PIN hashes are secrets) and `audit_log` itself. Any column with `hash`, `password`, `secret` or `token` in its name is stripped before storing (`audit_redact`).
   - Only the owner can read it (RLS with `is_owner()`), not even managers. Nobody can insert, update or delete through the API, and an append-only trigger blocks changes even from the SQL editor.
   - The page shows newest first, 50 per page, with filters for person, area and Auckland dates. Each row says what happened in words ("Signed off Fridge temperatures", "Marked Ana's purchase paid back") and, for updates, the changed fields before and after. Friendly names live in `web/lib/audit.ts`, with raw names as a fallback.
-- **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
+- **Notice board** (`/notices`, fifteenth migration): managers and the owner post announcements; staff read them.
+  - A notice has a title (up to 120 characters), plain text with line breaks (up to 2000), who it's for (everyone, or chosen sites), Pin, Needs acknowledgement and an optional "show until" date (through the end of that Auckland day).
+  - **Who sees what:** staff see live notices (not archived, not expired) for everyone, or for a site they chose in the last 30 days (`my_recent_site_ids()`). Managers and the owner see everything, including archived and expired ones (folded away at the bottom of the list).
+  - **Reading:** opening a notice marks it read (from the browser after the page opens, so link prefetching can't). "Needs acknowledgement" notices show "I've read and understood this". The database stamps the time, and an acknowledgement can never be cleared or changed, even from the SQL editor.
+  - **Home** shows a Notices card at the top while any are unread or waiting for your acknowledgement (pinned first). **More** shows Notices with a badge counting the same.
+  - **Managers and the owner:** New notice (with a live preview), Edit (the database stamps "edited"), and Archive (final; it disappears for staff). Each notice shows "Read by 12 of 18, acknowledged by 9" and who hasn't. The audience is every active person except the poster; for a site notice, those who chose one of its sites in the last 30 days.
+  - **Confirmed wording is locked** (sixteenth migration): once anyone has acknowledged a notice, its title and text can't be edited, even by the owner or from the SQL editor ("People have already confirmed this notice. Archive it and post a new one."). This holds even if Needs acknowledgement is turned off later. Pin, expiry, audience and archiving can still change, and notices nobody has acknowledged stay fully editable. The edit form shows the title and text read-only with that explanation.
+  - **Never deleted:** no delete grants, and a trigger refuses deletes. Only the managers' columns can be written; `posted_by` and `posted_at` are fixed.
+  - The rules for the audience, unread counts, read counts, form checks and expiry are in `web/lib/notices.ts`, with tests.
+  - **Phone notifications:** `notifyNewNotice()` in `web/lib/notify.ts` is called after a new notice is saved. It does nothing yet (TODO for slice 7).
+- **More menu** (`/more`): Notices, Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Timesheets** (`/time`, eleventh migration): hours are entered by hand, not clocked.
   - **Add my hours:** date, site, start and finish. A finish earlier than the start means the next morning. A live preview shows, for example, "7 h at work, 2 x 10 min paid rest, 1 x 30 min meal, 6.5 h paid".
@@ -110,8 +120,9 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - shared upload and CSV helpers (`uploads.ts`, `csv.ts`)
   - leave validation, the training matrix and the hours CSV
   - staff accounts (statuses, invite checks) and password rules
+  - notices (audience, inbox, read counts, form checks, expiry dates)
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -177,6 +188,10 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - **Database types:** generate them with `supabase gen types` to replace the `as` casts in page code.
 - **Old checklist tables and `staff_sites`:** no longer used by the app. Drop them in a later migration once nothing needs their history.
 - ~~**Fix clock-out screen.**~~ Done: "Needs fixing" on `/time` for managers and the owner.
+- **Notices:**
+  - **The 30-day rule lives in two places:** `my_recent_site_ids()` in the database and `RECENT_SITE_DAYS` in `web/lib/notices.ts` (for the managers' read counts). A unit test reads the migration and fails if they differ.
+  - **Audit log size:** every read and acknowledgement is an audit row (all tables are audited). Fine for a small team; revisit with the audit retention decision.
+  - **Push notifications:** slice 7 fills in `notifyNewNotice()`.
 - **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. It now only decides how long a site choice lasts. Change both together, or move the number into a settings table.
 - **Sick leave:**
   - **Add a certificate later:** a certificate can only be attached when asking for leave. Doctors' notes often come afterwards; add an "attach certificate" step for pending or approved requests.

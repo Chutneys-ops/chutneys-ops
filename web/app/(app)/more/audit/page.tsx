@@ -91,9 +91,23 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/more/au
         .filter((id): id is string => typeof id === "string"),
     ),
   ];
-  const sheetsResult = sheetIds.length
-    ? await supabase.from("record_sheets").select("id, template_code").in("id", sheetIds)
-    : { data: [] as { id: string; template_code: string }[] };
+  // Notice reads only know their notice; look up those titles.
+  const noticeIds = [
+    ...new Set(
+      entries
+        .filter((e) => e.table_name === "notice_reads")
+        .map((e) => (e.new_data ?? e.old_data)?.notice_id)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  ];
+  const [sheetsResult, noticesResult] = await Promise.all([
+    sheetIds.length
+      ? supabase.from("record_sheets").select("id, template_code").in("id", sheetIds)
+      : { data: [] as { id: string; template_code: string }[] },
+    noticeIds.length
+      ? supabase.from("notices").select("id, title").in("id", noticeIds)
+      : { data: [] as { id: string; title: string }[] },
+  ]);
 
   const lookups: AuditLookups = {
     staff: byId(staff),
@@ -103,6 +117,7 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/more/au
     ),
     sheets: Object.fromEntries((sheetsResult.data ?? []).map((s) => [s.id, s.template_code])),
     units: byId(unitsResult.data as { id: string; name: string }[] | null),
+    notices: Object.fromEntries(((noticesResult.data ?? []) as { id: string; title: string }[]).map((n) => [n.id, n.title])),
   };
 
   const pageHref = (n: number) => {

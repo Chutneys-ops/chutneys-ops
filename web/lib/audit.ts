@@ -35,6 +35,8 @@ export type AuditLookups = {
   sheets: Record<string, string>;
   /** temp unit id -> name */
   units: Record<string, string>;
+  /** notice id -> title (optional: older callers don't fill it) */
+  notices?: Record<string, string>;
 };
 
 export const EMPTY_LOOKUPS: AuditLookups = { staff: {}, sites: {}, templates: {}, sheets: {}, units: {} };
@@ -62,6 +64,8 @@ const TABLES: Record<string, [string, string]> = {
   checklist_items: ["Checklist items (old)", "checklist item"],
   checklist_runs: ["Checklists (old)", "checklist"],
   checklist_ticks: ["Checklist ticks (old)", "checklist tick"],
+  notices: ["Notices", "notice"],
+  notice_reads: ["Notice reads", "notice read"],
 };
 
 /** "purchases" -> "Purchases"; unknown tables -> the raw name. */
@@ -175,6 +179,17 @@ const COLUMNS: Record<string, string> = {
   invited_at: "Invite sent",
   deactivated_at: "Turned off at",
   deactivated_by: "Turned off by",
+  body: "Text",
+  site_ids: "For",
+  pinned: "Pinned",
+  needs_ack: "Needs acknowledgement",
+  posted_by: "Posted by",
+  posted_at: "Posted at",
+  expires_at: "Expires",
+  archived_at: "Archived at",
+  notice_id: "Notice",
+  read_at: "Read at",
+  acknowledged_at: "Acknowledged at",
 };
 
 // Where a column means something different in one table.
@@ -185,6 +200,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   "shifts.staff_id": "Person",
   "record_templates.code": "Code",
   "temp_units.name": "Unit",
+  "notices.edited_at": "Edited at",
 };
 
 /** Friendly column name; the raw name if there's no label. */
@@ -213,6 +229,7 @@ const STAFF_COLUMNS = new Set([
   "approved_by",
   "created_by",
   "deactivated_by",
+  "posted_by",
 ]);
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -227,9 +244,14 @@ export function formatAuditValue(column: string, value: unknown, lookups: AuditL
   if (value === null || value === undefined || value === "") return "(empty)";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") return String(value);
+  // A notice's sites: names, not ids. (null, "everyone", is "(empty)" above.)
+  if (column === "site_ids" && Array.isArray(value)) {
+    return cut(value.map((id) => (typeof id === "string" ? (lookups.sites[id] ?? id) : String(id))).join(", "));
+  }
   if (typeof value === "string") {
     if (STAFF_COLUMNS.has(column)) return lookups.staff[value] ?? value;
     if (column === "site_id") return lookups.sites[value] ?? value;
+    if (column === "notice_id") return lookups.notices?.[value] ?? value;
     if (column === "unit_id") return lookups.units[value] ?? value;
     if (column === "template_code") return lookups.templates[value] ?? value;
     if (column === "topic" && value in TOPIC_LABELS) return TOPIC_LABELS[value as TrainingTopic];
@@ -333,6 +355,20 @@ export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_L
       if (changed(entry, "status")) {
         const verb = str(entry.new_data, "status") === "approved" ? "Approved" : "Declined";
         return `${verb} ${person("staff_id")}'s leave`;
+      }
+      break;
+    }
+    case "notices": {
+      const title = str(row, "title") ?? "a notice";
+      if (action === "insert") return `Posted notice "${cut(title)}"`;
+      if (becameSet(entry, "archived_at")) return `Archived notice "${cut(title)}"`;
+      return `Edited notice "${cut(title)}"`;
+    }
+    case "notice_reads": {
+      const title = lookups.notices?.[str(row, "notice_id") ?? ""] ?? "a notice";
+      if (action === "insert") return `Read ${title === "a notice" ? title : `"${cut(title)}"`}`;
+      if (becameSet(entry, "acknowledged_at")) {
+        return `Acknowledged ${title === "a notice" ? title : `"${cut(title)}"`}`;
       }
       break;
     }
