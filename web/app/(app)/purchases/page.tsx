@@ -284,12 +284,12 @@ export default async function PurchasesPage({ searchParams }: PageProps<"/purcha
           <AddPurchaseForm siteId={shift.site.id} siteName={shift.site.name} />
         ) : (
           <>
-            <p className="text-[15px] text-ink">Clock in at a site to add a purchase.</p>
+            <p className="text-[15px] text-ink">Choose a site to add a purchase.</p>
             <Link
               href="/start"
               className="mt-3 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-4 font-semibold text-white hover:bg-primary-dark"
             >
-              Pick a site
+              Choose site
             </Link>
           </>
         )}

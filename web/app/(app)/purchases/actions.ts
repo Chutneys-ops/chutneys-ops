@@ -52,7 +52,7 @@ export async function addPurchase(formData: FormData): Promise<PurchaseResult> {
   const shift = await getCurrentShift(supabase, userId);
   if (!shift) {
     await removeUpload(supabase, invoicePath);
-    return { ok: false, message: "Clock in at a site first (Change site, at the top)." };
+    return { ok: false, message: "Choose a site first (Choose site, at the top)." };
   }
   if (invoicePath && !isInvoicePathFor(invoicePath, shift.site.id)) {
     // Not a path this form makes: don't touch it, just refuse.

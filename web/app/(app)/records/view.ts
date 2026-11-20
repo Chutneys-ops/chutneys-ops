@@ -3,7 +3,7 @@
 // Staff: always the site of their open shift, today. There's no site id in
 // the URL to change, and RLS would refuse other sites anyway.
 // Managers and owner: ?site=...&date=... to look at any site and day. They
-// can add entries only where they are clocked in, today.
+// can add entries only at the site they chose today.
 
 import { notFound, redirect } from "next/navigation";
 import { aucklandDate } from "@/lib/dates";
@@ -27,7 +27,7 @@ export type RecordsView = {
   date: string;
   today: string;
   isManager: boolean;
-  /** You're clocked in at this site and looking at today. */
+  /** You chose this site today and are looking at today. */
   canAdd: boolean;
   /** Every site, for the manager filter. Empty for staff. */
   sites: (SiteSummary & { active: boolean })[];

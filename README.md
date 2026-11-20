@@ -7,34 +7,33 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
 ## What's built so far
 
 - **Database** (`supabase/migrations/`): all Phase 1 tables (sites, staff, shifts, checklists, temperature units and readings, cash-ups, daily sales, alerts) with row-level security on every table.
-- **Access by shift** (fourth migration): staff move between sites, so what you can do depends on where you're working today, not on a fixed list.
-  - Picking a site clocks you in (`start_shift`). Clock-in and clock-out times come from the database clock, and nobody can have two open shifts.
-  - Staff see and add records only at the site they're clocked in at.
-  - Managers and the owner see records at every site and can sign off anywhere. They need to be clocked in to add entries.
+- **Access by site choice** (fourth migration): staff move between sites, so what you can do depends on the site you chose today, not on a fixed list.
+  - "Choose site" (`start_shift`) records today's site in `shifts`. It no longer means hours (see Timesheets). A choice lasts 14 hours, so you choose again each day.
+  - Staff see and add records only at the site they chose today.
+  - Managers and the owner see records at every site and can sign off anywhere. They need to choose a site to add entries.
   - Money (cash-ups, daily sales) is owner only; managers can't see it.
-  - Forgotten clock-outs (fifth migration): a shift open for more than 14 hours no longer counts as being on shift. The next clock-in closes it with zero hours and `needs_review`, and staff see "Your last shift at X was never clocked out".
-  - Managers fix it on `/time` under "Needs fixing": pick the real clock-out in Auckland time and add a required note. `fix_clock_out` records who fixed it and clears `needs_review`.
+  - Old clock-in/clock-out rows (and `fix_clock_out`, `needs_review`) stay in the database for history. The app no longer shows Clock out, forgotten-shift notices or the "Needs fixing" list.
   - `staff_sites` is no longer used for access. It's kept for now as history.
 - **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. `/` goes to `/start`.
-- **Site picker** (`/start`): "Where are you working today?" with a big card per site. Tapping one clocks you in and opens Records. The header shows "Working at …" with Change site and Clock out.
+- **Choose site** (`/start`): a big card per site. Tapping one sets today's site and opens Records. The header shows "Site: …" with Change site.
 - **Food safety records** (`/records`, third migration): record types from templates in the database:
   - opening checks for each kind of site
   - fridge temperatures, cooking, cooling, reheating, hot holding, cold display, transport, batter fermentation and cleaning
   - deliveries, maintenance, incidents and complaints
 
   How the records work:
-  - The site comes from your open shift, not the URL. Managers and the owner get a site and date filter.
+  - The site comes from today's site choice, not the URL. Managers and the owner get a site and date filter.
   - Entries can never be edited or deleted. Mistakes are fixed with a correction entry, and every entry can have Comments.
   - A database trigger checks every value against its template. Out-of-range readings, or a "No" on a check that should be "Yes", are flagged and need a corrective action.
   - Cooling and batter readings taken hours later are added as follow-up entries.
   - A manager or owner signs off each day's sheet with a 4-digit PIN, set under More and stored only as a hash. Five wrong PINs lock sign-off for 15 minutes.
 - **Opening checks**: the old opening checklist is now a record template per kind of site (`opening_checks_truck`, `_cafe`, `_restaurant`). The checklist pages are gone; the old checklist tables are still in the database.
 - **Purchases** (`/purchases`, seventh migration): groceries and supplies bought for a site, with the invoice for GST.
-  - Add a purchase where you're clocked in: supplier, what was bought, total incl GST, GST included yes/no, how it was paid (company card, till cash, own money) and comments.
+  - Add a purchase at the site you chose today: supplier, what was bought, total incl GST, GST included yes/no, how it was paid (company card, till cash, own money) and comments.
   - The database works out the GST (`round(total * 3 / 23, 2)`, or 0 when the supplier isn't GST registered), so nobody can type it wrong.
   - Every purchase needs an invoice (photo or PDF) or a "no receipt" reason. A check constraint enforces it.
   - "Take photo" opens the camera; "Choose file" takes a photo or PDF (two buttons because Android hides the file picker when the camera option is set). Photos are shrunk in the browser to 1600 px wide JPEG (about 200-400 KB) before uploading, which also strips GPS data.
-  - Invoices live in a private Storage bucket, `invoices` (5 MB, images and PDF), at `{site_id}/{yyyy}/{mm}/{uuid}.{ext}`. Storage policies: upload only into the folder of the site you're on shift at; read your own uploads; managers and the owner read all. A purchase can only point at your own file in that site's folder. Files are shown with short-lived signed URLs through `/purchases/invoice/<id>`.
+  - Invoices live in a private Storage bucket, `invoices` (5 MB, images and PDF), at `{site_id}/{yyyy}/{mm}/{uuid}.{ext}`. Storage policies: upload only into the folder of the site you chose today; read your own uploads; managers and the owner read all. A purchase can only point at your own file in that site's folder. Files are shown with short-lived signed URLs through `/purchases/invoice/<id>`.
   - The file is uploaded first, then the purchase is saved. If saving fails, the file is deleted (allowed only for your own file that no purchase uses).
   - Nobody can edit or delete a purchase. Staff see their own; managers and the owner see all, with site and month filters.
   - "Owed to staff": own-money purchases not yet paid back. A manager or the owner taps "Mark paid back" (`mark_reimbursed`). You can't mark your own, except the owner.
@@ -42,14 +41,14 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
 - **Sick leave** (`/leave`, eighth migration): staff request sick leave (sick, injured or caring for a dependant) for a date range, in whole days or hours. Leave is stored in hours, because the Employment Leave Act 2026 moves leave to hours.
   - An optional medical certificate (photo or PDF) goes to a private bucket, `leave-documents`, at `{staff_id}/{uuid}.{ext}`. You can upload only into your own folder and read your own; managers and the owner read all. It uses the same "Take photo / Choose file" picker and photo shrinking as purchases (`components/document-picker.tsx`).
   - Staff see only their own requests. Managers and the owner decide them on **Leave requests** through `decide_leave`: they can adjust the hours when approving, a decline needs a note, and a decision is final. You can't decide your own (the owner can).
-  - **Food safety:** the form asks "Do you have vomiting or diarrhoea?". If yes, you're clocked out straight away and `start_shift` refuses with "Your manager needs to clear you to return to work after illness" until a manager clears you. Clearing is separate from approving: even a declined request still has to be cleared.
+  - **Food safety:** the form asks "Do you have vomiting or diarrhoea?". If yes, today's site choice ends straight away. Until a manager clears you, `start_shift` refuses with "Your manager needs to clear you to return to work after illness", and you can't enter your own hours for days after the illness started. Clearing is separate from approving: even a declined request still has to be cleared.
   - **Staff sickness** (managers): the MPI staff sickness record (name, date sick, date cleared, cleared by) with "Clear to return". The 48-hour symptom-free reminder needs a tick-box before it can be submitted.
   - `needs_clearance()` only says whether *you* need clearing, so nobody can look up a colleague's illness.
 - **Training records** (`/training`, ninth migration): managers and the owner record training they gave (topic, date, notes). Their login is their trainer signature, stamped by the database.
   - The trainee sees "Training to confirm" and taps Confirm (`confirm_training`). Logging in is their signature; drawing one with a finger is optional and is stored as a PNG in the private `signatures` bucket.
   - After both have signed, a trigger locks the record. Before that, only the trainee's confirmation can be added. Nobody can edit or delete records through the API.
   - **Training matrix** (managers): staff down the side, topics across, the latest date in each cell. Dates the trainee hasn't confirmed yet are marked with `*`.
-- **Hours and leave export** (owner only, More > Export hours and leave): a CSV of shifts and approved leave for a date range (up to 92 days): name, site, date, start, end, hours, type, edit note. Leave rows put their first and last day in Start and End. The route returns 403 for anyone but the owner and fetches in pages, so it isn't cut off at the API's 1,000-row limit.
+- **Hours and leave export** (owner only, More > Export hours and leave): a CSV of timesheets and approved leave for a date range (up to 92 days): name, site, date, start, finish, at work, rest breaks, meal breaks, paid hours, type, status, edit note. Leave rows put their first and last day in Start and Finish, and their hours in Paid hours. The route returns 403 for anyone but the owner and fetches in pages, so it isn't cut off at the API's 1,000-row limit.
 - **Audit log** (tenth migration, owner only at More > Audit log): who changed what, and when, on every business table.
   - One trigger function, `audit_row()`, writes a row for every insert, update and delete: time, person (`auth.uid()`, which is still the real person inside functions like `mark_reimbursed`), their role, table, row id, old and new data, and for updates only the changed columns. "System" means a migration, the seed or the SQL editor. An update that changes nothing writes no row, so re-running the seed adds nothing.
   - Audited: every table in `public` except `staff_pins` (PIN hashes are secrets) and `audit_log` itself. Any column with `hash`, `password`, `secret` or `token` in its name is stripped before storing (`audit_redact`).
@@ -57,16 +56,25 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - The page shows newest first, 50 per page, with filters for person, area and Auckland dates. Each row says what happened in words ("Signed off Fridge temperatures", "Marked Ana's purchase paid back") and, for updates, the changed fields before and after. Friendly names live in `web/lib/audit.ts`, with raw names as a fallback.
 - **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
-- **Time** (`/time`): your current shift ("On shift at Orewa Cafe since 9:02 am") and this week's shifts with total hours. Missing clock-outs show as "your manager will fix it" and count zero hours. Managers and the owner also see the "Needs fixing" list.
+- **Timesheets** (`/time`, eleventh migration): hours are entered by hand, not clocked.
+  - **Add my hours:** date, site, start and finish. A finish earlier than the start means the next morning. A live preview shows, for example, "7 h at work, 2 x 10 min paid rest, 1 x 30 min meal, 6.5 h paid".
+  - **This week:** your timesheets with paid and at-work totals and their status. You can change or delete your own until they're approved.
+  - **Breaks are worked out, never typed.** `nz_breaks()` follows the Employment NZ table: rest breaks are 10 minutes and paid, meal breaks are 30 minutes and unpaid. A trigger stores minutes at work, breaks and paid minutes (at work minus 30 per meal break). The browser can't write them. `web/lib/breaks.ts` has the same table for the preview. Its test reads the shared cases in `supabase/tests/nz_breaks.test.sql`, which also tests the SQL, so the two can't drift apart.
+  - **Rules in the database:** no future dates, at most 16 hours, and no overlapping timesheets for one person (an exclusion constraint, `btree_gist`). Times are Auckland local, so daylight saving nights count real time.
+  - **Managers and the owner:**
+    - "To approve" is grouped by week and site, with Approve all (`approve_timesheets`: never your own, except the owner).
+    - "Add hours for someone".
+    - Adding or changing someone else's hours needs a note, and so does changing approved hours.
+    - Approved hours are locked for staff and can't be deleted.
 - **Bottom navigation**: Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests in `web/lib/*.test.ts` for:
-  - NZ dates, record validation and shift hours
+  - NZ dates, record validation, NZ breaks (every boundary, plus agreement with the SQL) and timesheet checks
   - purchases (GST maths, CSV)
   - shared upload and CSV helpers (`uploads.ts`, `csv.ts`)
   - leave validation, the training matrix and the hours CSV
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies) and the audit log, including a check that every table is audited.
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, and the audit log, including a check that every table is audited.
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -85,13 +93,13 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
    ```
 
    The seed is safe to re-run: rows that already exist are skipped or updated. Don't use `npx supabase db reset`; it wipes everything you've tested with.
-5. Log in with one of the seeded test users. The password for all three is `password123`, and they are for local testing only. After logging in, pick a site: that clocks you in there. Clock out from the header when you're done testing.
+5. Log in with one of the seeded test users. The password for all three is `password123`, and they are for local testing only. After logging in, choose a site: that decides which site's records you can add today. Enter hours on Time.
 
    | Login | Role | What they can do |
    |---|---|---|
    | `owner@test.local` | owner | everything, including money pages |
-   | `manager@test.local` | manager | view and sign off records at every site; add entries where clocked in |
-   | `staff@test.local` | staff | add records only at the site they're clocked in at |
+   | `manager@test.local` | manager | view and sign off records at every site; add entries at the site they chose; approve hours |
+   | `staff@test.local` | staff | add records only at the site they chose today; enter their own hours |
 
 6. Check `web/.env.local` has `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (copy them from `npx supabase status`).
 7. `cd web` then `npm run dev`, and open http://localhost:3000. Studio (the database UI) is at http://localhost:54323.
@@ -112,8 +120,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - **Database types:** generate them with `supabase gen types` to replace the `as` casts in page code.
 - **Old checklist tables and `staff_sites`:** no longer used by the app. Drop them in a later migration once nothing needs their history.
 - ~~**Fix clock-out screen.**~~ Done: "Needs fixing" on `/time` for managers and the owner.
-- **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. Change both together, or move the number into a settings table.
-- **Night shifts longer than 14 hours** would be treated as forgotten. Fine for now; revisit if a site ever runs one.
+- **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. It now only decides how long a site choice lasts. Change both together, or move the number into a settings table.
 - **Sick leave:**
   - **Add a certificate later:** a certificate can only be attached when asking for leave. Doctors' notes often come afterwards; add an "attach certificate" step for pending or approved requests.
   - **Leave in the hours export:** a leave request is one row with its total hours, even if it runs past the export's end date. Split by day if payroll needs it.
@@ -132,7 +139,12 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - **Hosted buckets:** `config.toml` only creates the buckets (`invoices`, `leave-documents`, `signatures`) locally. Before go-live, run `npx supabase seed buckets --remote` (or create them in the dashboard with the same settings).
   - **HEIC photos:** "Choose file" with an iPhone HEIC photo only works in Safari (other browsers can't open HEIC to shrink it). The camera button always gives a JPEG.
   - **Xero:** push purchases as bills instead of the CSV once the Xero connection exists.
-- **Shift reports for payroll:** hours per person per week across all sites, for managers and the owner.
+- **Timesheets:**
+  - **Agreed break arrangements per person:** the Employment Relations Act lets an employer and employee agree different break times, or compensation instead of breaks. Everyone gets the default Employment NZ table for now. Add a per-person arrangement (for example a 45-minute unpaid meal, or a paid meal break) for `nz_breaks` or the paid-minutes trigger to use.
+  - **Changing someone's approved hours:** the database allows it for managers with a note, but the page only shows "Change" on your own week and on hours waiting for approval. Add a manager view of approved weeks.
+  - **How far back:** hours can be entered for any past date. Consider limiting staff to the current pay period, so late entries go through a manager.
+  - **Weekly totals for payroll:** a per-person, per-week summary (paid hours, leave) for managers, beyond the owner's CSV.
+  - **Old shift rows:** `shifts` still holds old clock-in history, and `fix_clock_out`/`clock_out` remain in the database. Drop them in a later migration once nobody needs that history.
 - **Food safety records:**
   - ~~**PIN lockout.**~~ Done: 5 wrong PINs lock sign-off for 15 minutes. `sign_off_sheet` returns a status (`ok`, `wrong_pin`, `locked`) instead of raising for a wrong PIN, because a raised exception would roll back the saved attempt count.
   - **Unlock early:** an owner can't clear a manager's lock yet; they wait 15 minutes or set a new PIN. Add an owner-only unlock if that's too slow in practice.
@@ -158,7 +170,7 @@ Do not rebuild the till. Build an operations hub that sits on top of the tools C
 - Cash-up with automatic cash difference
 - Owner view across every site
 - Nightly summary to Slack or WhatsApp
-- Later: sales from the till, delivery app reports, clock in and out, stock and waste, truck locations, an "ask the app" assistant
+- Later: sales from the till, delivery app reports, stock and waste, truck locations, an "ask the app" assistant
 
 ## Stack
 

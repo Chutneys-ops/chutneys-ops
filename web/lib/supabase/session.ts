@@ -39,26 +39,16 @@ function isStale(clockIn: string): boolean {
   return Date.now() - new Date(clockIn).getTime() > STALE_HOURS * 60 * 60 * 1000;
 }
 
-/** Your open shift (clock_out is null), with its site. There is at most one:
- *  a partial unique index in the database guarantees it. A shift open for
- *  more than 14 hours doesn't count (on_shift_at in the database agrees), so
- *  the header never says "Working at X" when your entries would be refused. */
+/** Today's site choice ("Choose site"): your open row in shifts, with its
+ *  site. There is at most one (a partial unique index). A choice older than
+ *  14 hours doesn't count (on_shift_at in the database agrees), so you
+ *  choose again each day and the header never shows a site your entries
+ *  would be refused at. */
 export async function getCurrentShift(supabase: Supabase, userId: string): Promise<CurrentShift | null> {
   const shift = await getOpenShift(supabase, userId);
   // A site closed while you were on shift: treat it as not clocked in.
   if (!shift?.site || isStale(shift.clock_in)) return null;
   return { id: shift.id, clock_in: shift.clock_in, site: shift.site };
-}
-
-/** An open shift older than 14 hours: you forgot to clock out. start_shift
- *  will close it with zero hours for a manager to fix. */
-export async function getForgottenShift(
-  supabase: Supabase,
-  userId: string,
-): Promise<{ clock_in: string; siteName: string } | null> {
-  const shift = await getOpenShift(supabase, userId);
-  if (!shift || !isStale(shift.clock_in)) return null;
-  return { clock_in: shift.clock_in, siteName: shift.site?.name ?? "a closed site" };
 }
 
 /** "truck" -> "Food truck", for the site picker and header. */

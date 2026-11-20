@@ -45,7 +45,8 @@ const TABLES: Record<string, [string, string]> = {
   staff: ["Staff", "staff member"],
   staff_sites: ["Staff sites (old)", "staff site link"],
   sites: ["Sites", "site"],
-  shifts: ["Shifts", "shift"],
+  shifts: ["Site choices", "site choice"],
+  timesheets: ["Timesheets", "timesheet"],
   record_templates: ["Record templates", "record template"],
   record_sheets: ["Food safety sheets", "record sheet"],
   record_entries: ["Food safety entries", "record entry"],
@@ -97,8 +98,20 @@ const COLUMNS: Record<string, string> = {
   note: "Note",
   notes: "Notes",
   comments: "Comments",
-  clock_in: "Clock in",
-  clock_out: "Clock out",
+  clock_in: "Chose site at",
+  clock_out: "Left site at",
+  work_date: "Date",
+  start_time: "Start",
+  finish_time: "Finish",
+  start_at: "Started",
+  finish_at: "Finished",
+  minutes_at_work: "Minutes at work",
+  rest_breaks: "Rest breaks",
+  meal_breaks: "Meal breaks",
+  paid_minutes: "Paid minutes",
+  approved_by: "Approved by",
+  approved_at: "Approved at",
+  created_by: "Entered by",
   needs_review: "Needs fixing",
   edited_by: "Fixed by",
   edited_at: "Fixed at",
@@ -190,6 +203,8 @@ const STAFF_COLUMNS = new Set([
   "decided_by",
   "trainee_id",
   "trainer_id",
+  "approved_by",
+  "created_by",
 ]);
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -238,7 +253,7 @@ function becameSet(entry: AuditEntry, field: string): boolean {
   return changed(entry, field) && entry.old_data?.[field] == null && entry.new_data?.[field] != null;
 }
 
-/** One line for the list: "Signed off Fridge temperatures", "Clocked out". */
+/** One line for the list: "Signed off Fridge temperatures", "Approved Ana's hours". */
 export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_LOOKUPS): string {
   const row = entry.new_data ?? entry.old_data;
   const person = (key: string) => {
@@ -253,12 +268,20 @@ export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_L
   switch (entry.table_name) {
     case "shifts": {
       const site = lookups.sites[str(row, "site_id") ?? ""] ?? "a site";
-      if (action === "insert") return `Clocked in at ${site}`;
-      if (changed(entry, "edit_note") || changed(entry, "edited_by")) return `Fixed ${person("staff_id")}'s clock-out`;
-      if (becameSet(entry, "clock_out")) {
-        return entry.new_data?.needs_review === true ? "Shift closed as a forgotten clock-out" : `Clocked out of ${site}`;
-      }
+      // Since timesheets, a shift row is just "which site today".
+      if (action === "insert") return `Chose ${site}`;
+      if (changed(entry, "edit_note") || changed(entry, "edited_by")) return `Fixed ${person("staff_id")}'s old clock-out`;
+      if (becameSet(entry, "clock_out")) return `Left ${site}`;
       break;
+    }
+    case "timesheets": {
+      const date = str(row, "work_date") ?? "";
+      const whose = entry.actor_id && entry.actor_id === str(row, "staff_id") ? "their" : `${person("staff_id")}'s`;
+      if (action === "insert") return `Added ${whose} hours for ${date}`;
+      if (changed(entry, "status") && str(entry.new_data, "status") === "approved") {
+        return `Approved ${person("staff_id")}'s hours for ${date}`;
+      }
+      return `Changed ${whose} hours for ${date}`;
     }
     case "record_sheets": {
       const title = templateTitle(str(row, "template_code"));

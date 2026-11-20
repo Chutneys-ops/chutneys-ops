@@ -28,7 +28,7 @@ export default async function ExportHoursPage() {
       <BackLink />
       <h1 className="text-3xl font-bold">Export hours and leave</h1>
       <p className="mt-1 text-sm text-muted">
-        One row per shift or approved leave request: name, site, date, start, end, hours, type and any edit note. Up to{" "}
+        One row per timesheet (at work, rest and meal breaks, paid hours, status) or approved leave request. Up to{" "}
         {MAX_EXPORT_DAYS} days at a time.
       </p>
 

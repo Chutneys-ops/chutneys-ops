@@ -101,7 +101,7 @@ test("what happened: food safety and shifts", () => {
   );
   assert.equal(
     describeAudit(entry({ table_name: "shifts", new_data: { site_id: SITE } }), lookups),
-    "Clocked in at Truck - Sandringham",
+    "Chose Truck - Sandringham",
   );
   assert.equal(
     describeAudit(
@@ -114,7 +114,7 @@ test("what happened: food safety and shifts", () => {
       }),
       lookups,
     ),
-    "Clocked out of Truck - Sandringham",
+    "Left Truck - Sandringham",
   );
   assert.equal(
     describeAudit(
@@ -128,7 +128,7 @@ test("what happened: food safety and shifts", () => {
       }),
       lookups,
     ),
-    "Fixed Ana's clock-out",
+    "Fixed Ana's old clock-out",
   );
 });
 
@@ -179,6 +179,45 @@ test("what happened: purchases, leave, training, and the generic fallback", () =
   assert.equal(describeAudit(entry({ table_name: "sites", action: "update", changed_fields: ["name"] })), "Updated site");
   assert.equal(describeAudit(entry({ table_name: "temp_units", action: "delete", old_data: {} })), "Deleted fridge or freezer");
   assert.equal(describeAudit(entry({ table_name: "brand_new", action: "insert", new_data: {} })), "Added brand_new");
+});
+
+test("what happened: timesheets", () => {
+  const sheet = { staff_id: ANA, work_date: "2026-11-20", start_time: "09:00:00", status: "submitted" };
+  assert.equal(describeAudit(entry({ table_name: "timesheets", new_data: sheet }), lookups), "Added their hours for 2026-11-20");
+  assert.equal(
+    describeAudit(entry({ table_name: "timesheets", actor_id: MIA, new_data: sheet }), lookups),
+    "Added Ana's hours for 2026-11-20",
+  );
+  assert.equal(
+    describeAudit(
+      entry({
+        table_name: "timesheets",
+        actor_id: MIA,
+        action: "update",
+        old_data: sheet,
+        new_data: { ...sheet, status: "approved" },
+        changed_fields: ["approved_at", "approved_by", "status"],
+      }),
+      lookups,
+    ),
+    "Approved Ana's hours for 2026-11-20",
+  );
+  assert.equal(
+    describeAudit(
+      entry({
+        table_name: "timesheets",
+        action: "update",
+        old_data: sheet,
+        new_data: { ...sheet, start_time: "09:30:00" },
+        changed_fields: ["start_time"],
+      }),
+      lookups,
+    ),
+    "Changed their hours for 2026-11-20",
+  );
+  assert.equal(areaLabel("timesheets"), "Timesheets");
+  assert.equal(columnLabel("timesheets", "paid_minutes"), "Paid minutes");
+  assert.equal(formatAuditValue("approved_by", MIA, lookups), "Mia");
 });
 
 test("change list: only the changed fields, before and after", () => {

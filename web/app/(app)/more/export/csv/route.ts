@@ -1,18 +1,13 @@
 // /more/export/csv?from=2026-11-01&to=2026-11-30: the owner's hours and
-// leave CSV for payroll. One row per shift (by clock-in day) and per
-// approved leave request that overlaps the range.
+// leave CSV for payroll. One row per timesheet (by work date: at work,
+// breaks, paid hours, status) and per approved leave request that overlaps
+// the range.
 //
 // The role is checked here on the server: anyone else gets 403, whatever
 // the page shows or hides.
 
 import { NextResponse } from "next/server";
-import {
-  checkExportRange,
-  exportBounds,
-  hoursCsv,
-  type LeaveExportRow,
-  type ShiftExportRow,
-} from "@/lib/hours-export";
+import { checkExportRange, hoursCsv, type LeaveExportRow, type TimesheetExportRow } from "@/lib/hours-export";
 import type { LeaveReason } from "@/lib/leave";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/supabase/session";
@@ -23,11 +18,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 // so fetch page by page until a short page comes back.
 const PAGE = 1000;
 
-type ShiftRow = {
-  clock_in: string;
-  clock_out: string | null;
-  needs_review: boolean;
-  edit_note: string | null;
+type TimesheetRow = Omit<TimesheetExportRow, "name" | "site"> & {
   site: { name: string } | null;
   person: { name: string } | null;
 };
@@ -39,19 +30,23 @@ type LeaveRow = {
   person: { name: string } | null;
 };
 
-async function allShifts(supabase: Supabase, start: string, end: string): Promise<ShiftRow[]> {
-  const rows: ShiftRow[] = [];
+async function allTimesheets(supabase: Supabase, from: string, to: string): Promise<TimesheetRow[]> {
+  const rows: TimesheetRow[] = [];
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await supabase
-      .from("shifts")
-      .select("clock_in, clock_out, needs_review, edit_note, site:sites(name), person:staff!shifts_staff_id_fkey(name)")
-      .gte("clock_in", start)
-      .lt("clock_in", end)
-      .order("clock_in")
+      .from("timesheets")
+      .select(
+        "work_date, start_time, finish_time, minutes_at_work, rest_breaks, meal_breaks, paid_minutes, status, " +
+          // timesheets links to staff four times; name the person's link.
+          "edit_note, site:sites(name), person:staff!timesheets_staff_id_fkey(name)",
+      )
+      .gte("work_date", from)
+      .lte("work_date", to)
+      .order("work_date")
       .order("id")
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(error.message);
-    rows.push(...((data ?? []) as unknown as ShiftRow[]));
+    rows.push(...((data ?? []) as unknown as TimesheetRow[]));
     if (!data || data.length < PAGE) return rows;
   }
 }
@@ -87,26 +82,20 @@ export async function GET(request: Request) {
   const problem = checkExportRange(from, to);
   if (problem) return new NextResponse(problem, { status: 400 });
 
-  const { start, end } = exportBounds(from, to);
-  let shifts: ShiftRow[];
+  let timesheets: TimesheetRow[];
   let leave: LeaveRow[];
   try {
-    [shifts, leave] = await Promise.all([allShifts(supabase, start, end), allLeave(supabase, from, to)]);
+    [timesheets, leave] = await Promise.all([allTimesheets(supabase, from, to), allLeave(supabase, from, to)]);
   } catch (error) {
     return new NextResponse(`Could not export: ${(error as Error).message}`, { status: 500 });
   }
 
   const csv = hoursCsv(
-    shifts.map(
-      (s): ShiftExportRow => ({
-        name: s.person?.name ?? "Unknown",
-        site: s.site?.name ?? "",
-        clock_in: s.clock_in,
-        clock_out: s.clock_out,
-        needs_review: s.needs_review,
-        edit_note: s.edit_note,
-      }),
-    ),
+    timesheets.map(({ site, person, ...t }): TimesheetExportRow => ({
+      ...t,
+      name: person?.name ?? "Unknown",
+      site: site?.name ?? "",
+    })),
     leave.map(
       (l): LeaveExportRow => ({
         name: l.person?.name ?? "Unknown",

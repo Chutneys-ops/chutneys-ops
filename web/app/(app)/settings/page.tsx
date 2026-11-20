@@ -8,7 +8,7 @@ import { PinForm } from "./pin-form";
 
 // Settings (from the More menu): your account and your sign-off PIN
 // (managers and owner). Sign out is on the More menu; shift controls live in
-// the header (Change site, Clock out).
+// the header (Change site).
 export default async function SettingsPage() {
   await connection();
   const supabase = await createClient();

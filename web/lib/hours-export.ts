@@ -1,25 +1,31 @@
-// The owner's "hours and leave" CSV for payroll: one row per shift or
+// The owner's "hours and leave" CSV for payroll: one row per timesheet or
 // approved leave request. Pure, so it's tested with node --test.
 //
-// Columns: Name, Site, Date, Start, End, Hours, Type, Edit note.
-//   Shift rows: Date is the clock-in day; Start and End are 24-hour Auckland
-//   times. An open shift has no End or Hours.
-//   Leave rows: Date is the first day; Start and End are the first and last
-//   day (YYYY-MM-DD), because one request can cover several days.
+// Columns: Name, Site, Date, Start, Finish, At work (h), Rest breaks,
+// Meal breaks, Paid hours, Type, Status, Edit note.
+//   Timesheet rows: Start and Finish are the Auckland times entered (a
+//   Finish earlier than Start is the next morning). Breaks and paid hours
+//   come from the database (nz_breaks), never from the browser.
+//   Leave rows: Start and Finish are the first and last day (YYYY-MM-DD),
+//   because one request can cover several days; Paid hours is the leave.
 
-import { aucklandClock24, buildCsv } from "./csv.ts";
-import { aucklandDate } from "./dates.ts";
+import { buildCsv } from "./csv.ts";
 import { aucklandLocalToUtc } from "./hours.ts";
 import { LEAVE_REASON_LABELS, isYmd, type LeaveReason } from "./leave.ts";
 
 export const MAX_EXPORT_DAYS = 92;
 
-export type ShiftExportRow = {
+export type TimesheetExportRow = {
   name: string;
   site: string;
-  clock_in: string;
-  clock_out: string | null;
-  needs_review: boolean;
+  work_date: string;
+  start_time: string; // "09:00:00"
+  finish_time: string;
+  minutes_at_work: number;
+  rest_breaks: number;
+  meal_breaks: number;
+  paid_minutes: number;
+  status: "submitted" | "approved";
   edit_note: string | null;
 };
 
@@ -31,13 +37,24 @@ export type LeaveExportRow = {
   reason: LeaveReason;
 };
 
-export const HOURS_CSV_HEADER = ["Name", "Site", "Date", "Start", "End", "Hours", "Type", "Edit note"];
+export const HOURS_CSV_HEADER = [
+  "Name",
+  "Site",
+  "Date",
+  "Start",
+  "Finish",
+  "At work (h)",
+  "Rest breaks",
+  "Meal breaks",
+  "Paid hours",
+  "Type",
+  "Status",
+  "Edit note",
+];
 
-/** Hours between clock-in and clock-out, to 2 decimals. Null while open. */
-export function shiftHours(clockIn: string, clockOut: string | null): number | null {
-  if (!clockOut) return null;
-  const ms = Date.parse(clockOut) - Date.parse(clockIn);
-  return Math.round((ms / 3_600_000) * 100) / 100;
+/** 450 minutes -> "7.50" */
+export function hoursFromMinutes(minutes: number): string {
+  return (minutes / 60).toFixed(2);
 }
 
 /** Check the date range the owner picked. */
@@ -49,7 +66,8 @@ export function checkExportRange(from: string, to: string): string | null {
   return null;
 }
 
-/** Auckland days from..to (inclusive) as a UTC range [start, end), for clock_in. */
+/** Auckland days from..to (inclusive) as a UTC range [start, end). Used by
+ *  the audit log's date filter. */
 export function exportBounds(from: string, to: string): { start: string; end: string } {
   const next = new Date(`${to}T00:00:00Z`);
   next.setUTCDate(next.getUTCDate() + 1);
@@ -59,33 +77,35 @@ export function exportBounds(from: string, to: string): { start: string; end: st
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-/** Shifts and leave -> CSV, sorted by name, then date, then start. */
-export function hoursCsv(shifts: ShiftExportRow[], leave: LeaveExportRow[]): string {
+/** Timesheets and leave -> CSV, sorted by name, then date, then start. */
+export function hoursCsv(timesheets: TimesheetExportRow[], leave: LeaveExportRow[]): string {
   type Row = { sort: string; cells: (string | number)[] };
   const rows: Row[] = [];
 
-  for (const s of shifts) {
-    const date = aucklandDate(new Date(s.clock_in));
-    const start = aucklandClock24(s.clock_in);
-    const hours = shiftHours(s.clock_in, s.clock_out);
+  for (const t of timesheets) {
+    const start = t.start_time.slice(0, 5);
     rows.push({
-      sort: `${s.name}\u0000${date}\u0000${start}`,
+      sort: `${t.name}\u0000${t.work_date}\u0000${start}`,
       cells: [
-        s.name,
-        s.site,
-        date,
+        t.name,
+        t.site,
+        t.work_date,
         start,
-        s.clock_out ? aucklandClock24(s.clock_out) : "",
-        hours === null ? "" : hours.toFixed(2),
-        s.needs_review ? "Shift (needs review)" : s.clock_out ? "Shift" : "Shift (still open)",
-        s.edit_note ?? "",
+        t.finish_time.slice(0, 5),
+        hoursFromMinutes(t.minutes_at_work),
+        t.rest_breaks,
+        t.meal_breaks,
+        hoursFromMinutes(t.paid_minutes),
+        "Hours worked",
+        t.status === "approved" ? "Approved" : "Waiting for approval",
+        t.edit_note ?? "",
       ],
     });
   }
 
   for (const l of leave) {
     rows.push({
-      // "~" sorts after any time, so on the same day leave comes after shifts.
+      // "~" sorts after any time, so on the same day leave comes after hours.
       sort: `${l.name}\u0000${l.start_date}\u0000~`,
       cells: [
         l.name,
@@ -93,8 +113,12 @@ export function hoursCsv(shifts: ShiftExportRow[], leave: LeaveExportRow[]): str
         l.start_date,
         l.start_date,
         l.end_date,
+        "",
+        "",
+        "",
         Number(l.hours).toFixed(2),
         `Leave: ${LEAVE_REASON_LABELS[l.reason]}`,
+        "Approved",
         "",
       ],
     });

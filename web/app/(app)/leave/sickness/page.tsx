@@ -49,7 +49,7 @@ export default async function StaffSicknessPage() {
       <BackLink />
       <h1 className="text-3xl font-bold">Staff sickness</h1>
       <p className="mt-1 text-sm text-muted">
-        Food safety record of staff with vomiting or diarrhoea. They can&apos;t clock in until cleared.
+        Food safety record of staff with vomiting or diarrhoea. They can&apos;t choose a site or add hours for later days until cleared.
       </p>
 
       {error && (

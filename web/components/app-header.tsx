@@ -1,6 +1,5 @@
 import { connection } from "next/server";
 import Link from "next/link";
-import { clockOut } from "@/app/(app)/shift-actions";
 import { LogoMark } from "@/components/logo-mark";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentShift, getSession } from "@/lib/supabase/session";
@@ -18,8 +17,9 @@ const stripClass = "mx-auto flex w-full max-w-md items-center gap-2 px-4 py-1";
 const linkClass =
   "flex min-h-12 shrink-0 items-center px-2 text-sm font-semibold text-primary underline-offset-4 hover:text-primary-dark hover:underline";
 
-// Top of every signed-in page: the brand, then where you're working with
-// "Change site" and "Clock out".
+// Top of every signed-in page: the brand, then today's site with "Change
+// site". The site only decides which site's records you can add; hours are
+// entered as timesheets on /time.
 export async function AppHeader() {
   await connection();
   const supabase = await createClient();
@@ -33,22 +33,17 @@ export async function AppHeader() {
         {shift ? (
           <>
             <p className="min-w-0 flex-1 text-sm text-muted">
-              Working at <span className="font-semibold text-ink">{shift.site.name}</span>
+              Site: <span className="font-semibold text-ink">{shift.site.name}</span>
             </p>
             <Link href="/start?change=1" className={linkClass}>
               Change site
             </Link>
-            <form action={clockOut}>
-              <button type="submit" className={linkClass}>
-                Clock out
-              </button>
-            </form>
           </>
         ) : (
           <>
-            <p className="min-w-0 flex-1 text-sm text-muted">Not clocked in</p>
+            <p className="min-w-0 flex-1 text-sm text-muted">No site chosen today</p>
             <Link href="/start" className={linkClass}>
-              Pick a site
+              Choose site
             </Link>
           </>
         )}
