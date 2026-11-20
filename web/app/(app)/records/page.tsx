@@ -94,7 +94,7 @@ export default async function RecordsPage({ searchParams }: PageProps<"/records"
     { title: "Daily records", period: "daily" },
     { title: "When it happens", period: "event" },
   ];
-  const viewOnlyReason = view.date === view.today ? "you're not clocked in here" : "this is a past day";
+  const viewOnlyReason = view.date === view.today ? "you haven't chosen this site today" : "this is a past day";
 
   return (
     <main className="mx-auto w-full max-w-md px-4 pt-4 pb-6">

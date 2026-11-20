@@ -115,9 +115,9 @@ export async function addEntry(
   let continuesId: string | null = null;
 
   if (target.kind === "new") {
-    // The site is wherever you're clocked in, never something from the page.
+    // The site is the one you chose today, never something from the page.
     const shift = await getCurrentShift(supabase, userId);
-    if (!shift) return fail("Clock in at a site first (Change site, at the top).");
+    if (!shift) return fail("Choose a site first (Choose site, at the top).");
     const sheet = await getOrCreateTodaySheet(supabase, shift.site.id, code);
     if ("error" in sheet) return fail(sheet.error);
     if (sheet.signed_off_at) return fail("This sheet is signed off. Add a correction instead.");

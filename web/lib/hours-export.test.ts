@@ -1,11 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkExportRange, exportBounds, hoursCsv, shiftHours } from "./hours-export.ts";
+import { checkExportRange, exportBounds, hoursCsv, hoursFromMinutes } from "./hours-export.ts";
 
-test("shift hours", () => {
-  assert.equal(shiftHours("2026-11-19T20:00:00Z", "2026-11-20T04:30:00Z"), 8.5);
-  assert.equal(shiftHours("2026-11-19T20:00:00Z", "2026-11-19T20:20:00Z"), 0.33);
-  assert.equal(shiftHours("2026-11-19T20:00:00Z", null), null);
+test("hours from minutes", () => {
+  assert.equal(hoursFromMinutes(450), "7.50");
+  assert.equal(hoursFromMinutes(20), "0.33");
 });
 
 test("export range checks and Auckland bounds", () => {
@@ -20,39 +19,46 @@ test("export range checks and Auckland bounds", () => {
   });
 });
 
-test("hours CSV: shifts and leave, sorted by name then date", () => {
+test("hours CSV: timesheets with breaks and paid hours, plus leave, sorted by name then date", () => {
   const csv = hoursCsv(
     [
       {
         name: "Ben",
         site: "Orewa Cafe",
-        clock_in: "2026-11-19T20:00:00Z", // 09:00 on Fri 20 Nov in Auckland
-        clock_out: "2026-11-20T04:30:00Z", // 17:30
-        needs_review: false,
+        work_date: "2026-11-20",
+        start_time: "09:00:00",
+        finish_time: "16:00:00",
+        minutes_at_work: 420,
+        rest_breaks: 2,
+        meal_breaks: 1,
+        paid_minutes: 390,
+        status: "approved",
         edit_note: null,
       },
       {
         name: "Ana",
         site: "Truck - New Lynn",
-        clock_in: "2026-11-18T21:15:00Z",
-        clock_out: "2026-11-18T21:15:00Z",
-        needs_review: true,
-        edit_note: null,
+        work_date: "2026-11-20",
+        start_time: "17:00:00",
+        finish_time: "01:30:00", // past midnight
+        minutes_at_work: 510,
+        rest_breaks: 2,
+        meal_breaks: 1,
+        paid_minutes: 480,
+        status: "submitted",
+        edit_note: "Late catering, finished after 1",
       },
       {
         name: "Ana",
         site: "Truck - New Lynn",
-        clock_in: "2026-11-19T21:00:00Z",
-        clock_out: "2026-11-20T03:00:00Z",
-        needs_review: false,
-        edit_note: "Forgot to clock out, left at 4 pm",
-      },
-      {
-        name: "Ana",
-        site: "Truck - New Lynn",
-        clock_in: "2026-11-20T22:00:00Z",
-        clock_out: null,
-        needs_review: false,
+        work_date: "2026-11-18",
+        start_time: "10:00:00",
+        finish_time: "13:00:00",
+        minutes_at_work: 180,
+        rest_breaks: 1,
+        meal_breaks: 0,
+        paid_minutes: 180,
+        status: "approved",
         edit_note: null,
       },
     ],
@@ -61,12 +67,11 @@ test("hours CSV: shifts and leave, sorted by name then date", () => {
   assert.equal(
     csv,
     [
-      "Name,Site,Date,Start,End,Hours,Type,Edit note",
-      "Ana,Truck - New Lynn,2026-11-19,10:15,10:15,0.00,Shift (needs review),",
-      'Ana,Truck - New Lynn,2026-11-20,10:00,16:00,6.00,Shift,"Forgot to clock out, left at 4 pm"',
-      "Ana,,2026-11-20,2026-11-20,2026-11-21,16.00,Leave: Sick,",
-      "Ana,Truck - New Lynn,2026-11-21,11:00,,,Shift (still open),",
-      "Ben,Orewa Cafe,2026-11-20,09:00,17:30,8.50,Shift,",
+      "Name,Site,Date,Start,Finish,At work (h),Rest breaks,Meal breaks,Paid hours,Type,Status,Edit note",
+      "Ana,Truck - New Lynn,2026-11-18,10:00,13:00,3.00,1,0,3.00,Hours worked,Approved,",
+      'Ana,Truck - New Lynn,2026-11-20,17:00,01:30,8.50,2,1,8.00,Hours worked,Waiting for approval,"Late catering, finished after 1"',
+      "Ana,,2026-11-20,2026-11-20,2026-11-21,,,,16.00,Leave: Sick,Approved,",
+      "Ben,Orewa Cafe,2026-11-20,09:00,16:00,7.00,2,1,6.50,Hours worked,Approved,",
       "",
     ].join("\r\n"),
   );

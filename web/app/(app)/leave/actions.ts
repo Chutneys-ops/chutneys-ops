@@ -71,7 +71,7 @@ export async function requestLeave(formData: FormData): Promise<LeaveResult> {
   return {
     ok: true,
     message: values.gi_symptoms
-      ? "Request sent. Because of the vomiting or diarrhoea, you can't clock in until a manager clears you."
+      ? "Request sent. Because of the vomiting or diarrhoea, you can't choose a site or add hours for later days until a manager clears you."
       : "Request sent to your manager.",
   };
 }

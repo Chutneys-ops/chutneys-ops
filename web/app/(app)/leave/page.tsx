@@ -58,7 +58,7 @@ export default async function LeavePage() {
 
       {needsClearance && (
         <p role="alert" className="mt-4 rounded-[14px] border border-warning/40 bg-warning-light p-4 text-[15px] text-ink">
-          <span className="font-semibold text-warning">You can&apos;t clock in yet.</span> You reported vomiting or
+          <span className="font-semibold text-warning">You can&apos;t choose a site yet.</span> You reported vomiting or
           diarrhoea, so a manager needs to clear you to return to work (usually 48 hours after it stops).
         </p>
       )}

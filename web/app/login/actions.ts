@@ -25,7 +25,7 @@ export async function login(
   }
 
   // redirect() throws, so it must be outside any try/catch.
-  // /start sends you to Records if you are already clocked in somewhere.
+  // /start sends you to Records if you have already chosen a site today.
   redirect("/start");
 }
 
