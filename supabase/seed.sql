@@ -150,6 +150,16 @@ insert into staff (id, name, role) values
   ('d0000000-0000-0000-0000-000000000003', 'Test Staff', 'staff')
 on conflict (id) do nothing;
 
+-- Sample payroll codes (More > Payslips matches PDF file names to these).
+-- Only filled where empty, so a code changed in the app is kept.
+update staff s set payroll_code = v.code
+from (values
+  ('d0000000-0000-0000-0000-000000000001'::uuid, 'E001'),
+  ('d0000000-0000-0000-0000-000000000002'::uuid, 'E002'),
+  ('d0000000-0000-0000-0000-000000000003'::uuid, 'E003')
+) as v(id, code)
+where s.id = v.id and s.payroll_code is null;
+
 -- staff_sites no longer controls access (an open shift does: log in, pick a
 -- site, and you're clocked in there). These links are kept as history of
 -- where each person usually works. Managers and the owner see every site.

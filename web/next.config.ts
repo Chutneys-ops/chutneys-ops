@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
     "/more/verifier-pack/pdf": ["./assets/fonts/**"],
     "/api/cron/verifier-pack": ["./assets/fonts/**"],
   },
+  // unpdf (reading text inside payslip PDFs) loads pdf.js files of its own
+  // at run time. Load it with Node's own require, as in the tests, instead
+  // of bundling it.
+  serverExternalPackages: ["unpdf"],
   partialPrefetching: true,
   turbopack: {
     // The repo root has its own package-lock.json (for the Supabase CLI),

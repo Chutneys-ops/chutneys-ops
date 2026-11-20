@@ -72,7 +72,7 @@ const TABS: { label: string; href: string; also?: string[]; icon: ReactNode }[] 
   {
     label: "More",
     href: "/more",
-    also: ["/leave", "/training", "/settings", "/notices", "/roster"],
+    also: ["/leave", "/training", "/settings", "/notices", "/roster", "/payslips"],
     icon: (
       <Icon>
         <circle cx="5" cy="12" r="1.5" />

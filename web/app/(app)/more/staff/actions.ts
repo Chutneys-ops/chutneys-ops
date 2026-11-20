@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/supabase/session";
 import { requestOrigin } from "@/lib/request-origin";
+import { checkPayrollCode } from "@/lib/payslips";
 import { checkInvite, isRole, ROLE_LABELS } from "@/lib/staff";
 
 export type StaffActionState = { seq: number; ok?: boolean; message?: string };
@@ -190,4 +191,25 @@ export async function setActive(prev: StaffActionState, formData: FormData): Pro
       ? `${name} can sign in again.`
       : `${name} is turned off and signed out. Their records stay.`,
   };
+}
+
+// ---- Payroll code -----------------------------------------------------------------------
+
+/** The person's employee code in Crystal Payroll, used to match payslip
+ *  PDFs (More > Payslips). Empty clears it. */
+export async function setPayrollCode(prev: StaffActionState, formData: FormData): Promise<StaffActionState> {
+  const seq = prev.seq + 1;
+  const supabase = await ownerSession();
+  if (!supabase) return { seq, message: "Only the owner can change payroll codes." };
+
+  const id = String(formData.get("staffId") ?? "");
+  if (!UUID_RE.test(id)) return { seq, message: "Staff member not found." };
+  const checked = checkPayrollCode(String(formData.get("payrollCode") ?? ""));
+  if (!checked.ok) return { seq, message: checked.error };
+
+  const { error } = await supabase.rpc("set_staff_payroll_code", { target_id: id, code: checked.code });
+  if (error) return { seq, message: dbMessage(error, "Could not save the payroll code") };
+
+  refresh();
+  return { seq, ok: true, message: checked.code ? `Payroll code saved: ${checked.code}` : "Payroll code removed." };
 }

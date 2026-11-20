@@ -4,9 +4,10 @@ import { BackLink } from "@/components/back-link";
 import { NotStaff } from "@/components/not-staff";
 import { aucklandShortDay } from "@/lib/dates";
 import { ROLE_LABELS, sortByStatusThenName, STATUS_LABELS, staffStatus, type Role, type StaffStatus } from "@/lib/staff";
+import { loadPayrollCodes } from "@/lib/supabase/payroll-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/supabase/session";
-import { InviteForm, StaffActions } from "./staff-forms";
+import { InviteForm, PayrollCodeForm, StaffActions } from "./staff-forms";
 
 type StaffRow = {
   id: string;
@@ -16,6 +17,7 @@ type StaffRow = {
   active: boolean;
   invited_at: string | null;
   deactivated_at: string | null;
+  payroll_code: string | null;
 };
 type Login = { staff_id: string; joined: boolean; last_sign_in_at: string | null };
 
@@ -36,18 +38,22 @@ export default async function StaffPage() {
   if (!me) return <NotStaff />;
   if (me.role !== "owner") notFound();
 
-  const [staffResult, loginsResult] = await Promise.all([
+  // Payroll codes are private (only the owner and the person can read
+  // them), so they come from staff_payroll_codes(), not the staff table.
+  const [staffResult, loginsResult, codeResult] = await Promise.all([
     supabase.from("staff").select("id, name, email, role, active, invited_at, deactivated_at").order("name"),
     supabase.rpc("staff_logins"),
+    loadPayrollCodes(supabase),
   ]);
   const joined = new Map(((loginsResult.data ?? []) as Login[]).map((l) => [l.staff_id, l.joined]));
   const people = sortByStatusThenName(
-    ((staffResult.data ?? []) as StaffRow[]).map((row) => ({
+    ((staffResult.data ?? []) as Omit<StaffRow, "payroll_code">[]).map((row) => ({
       ...row,
+      payroll_code: codeResult.codes.get(row.id) ?? null,
       status: staffStatus(row.active, joined.get(row.id) ?? false),
     })),
   );
-  const error = staffResult.error ?? loginsResult.error;
+  const error = staffResult.error ?? loginsResult.error ?? codeResult.error;
 
   return (
     <main className="mx-auto w-full max-w-md px-4 pt-2 pb-6">
@@ -89,6 +95,9 @@ export default async function StaffPage() {
                   <span className={`rounded-full px-2.5 py-1 ${statusClass[person.status]}`}>
                     {STATUS_LABELS[person.status]}
                   </span>
+                  {person.payroll_code && (
+                    <span className="rounded-full border border-line px-2.5 py-1 text-muted">Payroll {person.payroll_code}</span>
+                  )}
                 </div>
                 {person.status === "invited" && person.invited_at && (
                   <p className="mt-2 text-sm text-muted">Invite sent {aucklandShortDay(person.invited_at)}</p>
@@ -98,9 +107,12 @@ export default async function StaffPage() {
                 )}
 
                 {isMe ? (
-                  <p className="mt-3 text-sm text-muted">
-                    You can&apos;t change your own role or turn off your own account, so there is always an owner.
-                  </p>
+                  <div className="mt-3 space-y-4">
+                    <p className="text-sm text-muted">
+                      You can&apos;t change your own role or turn off your own account, so there is always an owner.
+                    </p>
+                    <PayrollCodeForm person={{ id: person.id, payrollCode: person.payroll_code }} />
+                  </div>
                 ) : (
                   <details className="group mt-3">
                     <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between rounded-xl border border-line px-3 font-semibold text-ink hover:border-muted">
@@ -109,7 +121,10 @@ export default async function StaffPage() {
                         <path d="M6 9l6 6 6-6" />
                       </svg>
                     </summary>
-                    <div className="mt-4">
+                    <div className="mt-4 space-y-5">
+                      {person.status !== "deactivated" && (
+                        <PayrollCodeForm person={{ id: person.id, payrollCode: person.payroll_code }} />
+                      )}
                       <StaffActions person={{ id: person.id, name: person.name, role: person.role, status: person.status }} />
                     </div>
                   </details>

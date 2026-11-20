@@ -119,7 +119,7 @@ export async function sendToPeople(staffIds: string[], category: Category, messa
     const admin = createAdminClient();
     const [{ data: people }, { data: prefRows }] = await Promise.all([
       admin.from("staff").select("id, active").in("id", ids),
-      admin.from("notification_prefs").select("staff_id, notices, roster, reminders, approvals").in("staff_id", ids),
+      admin.from("notification_prefs").select("staff_id, notices, roster, reminders, approvals, payslips").in("staff_id", ids),
     ]);
     const prefs = new Map((prefRows ?? []).map((r) => [r.staff_id as string, prefsFrom(r)]));
     const wanted = (people ?? [])
