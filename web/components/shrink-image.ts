@@ -5,7 +5,7 @@
 //
 // Re-encoding also drops the photo's EXIF data (including GPS location).
 
-import { PHOTO_MAX_WIDTH, PHOTO_QUALITY, PHOTO_TARGET_BYTES, scaledSize } from "@/lib/purchases";
+import { PHOTO_MAX_WIDTH, PHOTO_QUALITY, PHOTO_TARGET_BYTES, scaledSize } from "@/lib/uploads";
 
 function toJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {

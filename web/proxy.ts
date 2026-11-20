@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Pages that need a logged-in user.
-const PROTECTED_PREFIXES = ["/start", "/records", "/time", "/purchases", "/settings"];
+const PROTECTED_PREFIXES = ["/start", "/records", "/time", "/purchases", "/more", "/leave", "/training", "/settings"];
 
 export async function proxy(request: NextRequest) {
   // Start with a "carry on as normal" response; Supabase may add cookies to it.

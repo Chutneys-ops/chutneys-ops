@@ -159,7 +159,8 @@ select throws_ok(
   'Ana cannot use someone else''s invoice');
 
 select is(
-  (select count(*)::int from storage.objects where bucket_id = 'invoices'),
+  (select count(*)::int from storage.objects
+   where bucket_id = 'invoices' and name like '10000000-0000-0000-0000-00000000000_/%'),
   1,
   'Ana sees only her own invoice file');
 
@@ -179,13 +180,16 @@ select is(
 -- Act as Mia (manager) -------------------------------------------------------
 select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
 
+-- Only count the test sites: the local database may have real test data too.
 select is(
-  (select count(*)::int from purchases),
+  (select count(*)::int from purchases
+   where site_id in ('10000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000b')),
   4,
   'A manager sees every purchase');
 
 select is(
-  (select count(*)::int from storage.objects where bucket_id = 'invoices'),
+  (select count(*)::int from storage.objects
+   where bucket_id = 'invoices' and name like '10000000-0000-0000-0000-00000000000_/%'),
   2,
   'A manager can read every invoice file');
 

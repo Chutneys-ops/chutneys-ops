@@ -134,6 +134,20 @@ public = false
 file_size_limit = "5MiB"
 allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
 
+# Sick leave certificates (photos or PDF). Private, like invoices. Policies:
+# supabase/migrations/20261124000000_sick_leave.sql.
+[storage.buckets.leave-documents]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+
+# Trainees' drawn signatures for training records. Small PNGs. Policies:
+# supabase/migrations/20261125000000_training.sql.
+[storage.buckets.signatures]
+public = false
+file_size_limit = "1MiB"
+allowed_mime_types = ["image/png"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

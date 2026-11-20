@@ -10,6 +10,9 @@ import { createClient } from "@/lib/supabase/server";
 export async function startShift(siteId: string) {
   const supabase = await createClient();
   const { error } = await supabase.rpc("start_shift", { site_id: siteId });
+  // Not cleared after vomiting or diarrhoea: back to the picker, which
+  // explains why, instead of the error screen.
+  if (error?.hint === "needs_clearance") redirect("/start?change=1");
   if (error) throw new Error(`Could not clock in: ${error.message}`);
   // redirect() throws, so it must come after the work and outside try/catch.
   redirect("/records");

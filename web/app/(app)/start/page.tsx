@@ -18,10 +18,13 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
   if (!me) return <NotStaff />;
 
   const { change } = await searchParams;
-  const [shift, forgotten] = await Promise.all([
+  const [shift, forgotten, clearance] = await Promise.all([
     getCurrentShift(supabase, userId),
     getForgottenShift(supabase, userId),
+    // Vomiting or diarrhoea reported and not cleared: start_shift will refuse.
+    supabase.rpc("needs_clearance"),
   ]);
+  const needsClearance = clearance.data === true;
   if (shift && change !== "1") redirect("/records");
 
   // RLS lets every signed-in person read active sites (for this picker).
@@ -43,6 +46,21 @@ export default async function StartPage({ searchParams }: PageProps<"/start">) {
           : "Picking a site clocks you in there."}
       </p>
       {forgotten && <ForgottenShiftNotice siteName={forgotten.siteName} clockIn={forgotten.clock_in} />}
+      {needsClearance && (
+        <div role="alert" className="mt-4 rounded-[14px] border border-warning/40 bg-warning-light p-4">
+          <p className="font-semibold text-warning">Your manager needs to clear you to return to work after illness</p>
+          <p className="mt-1 text-sm text-ink">
+            You reported vomiting or diarrhoea. For food safety you can&apos;t clock in until a manager clears you,
+            usually 48 hours after it stops.
+          </p>
+          <Link
+            href="/leave"
+            className="mt-2 inline-flex min-h-12 items-center text-sm font-semibold text-primary hover:text-primary-dark"
+          >
+            See your leave
+          </Link>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-red-800">

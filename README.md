@@ -39,11 +39,29 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Nobody can edit or delete a purchase. Staff see their own; managers and the owner see all, with site and month filters.
   - "Owed to staff": own-money purchases not yet paid back. A manager or the owner taps "Mark paid back" (`mark_reimbursed`). You can't mark your own, except the owner.
   - The owner gets "Export month": a CSV for the accountant (date, site, supplier, description, total, GST, payment method, who bought, invoice link, no-receipt reason). The route checks the role on the server, so anyone else gets 403.
+- **Sick leave** (`/leave`, eighth migration): staff request sick leave (sick, injured or caring for a dependant) for a date range, in whole days or hours. Leave is stored in hours, because the Employment Leave Act 2026 moves leave to hours.
+  - An optional medical certificate (photo or PDF) goes to a private bucket, `leave-documents`, at `{staff_id}/{uuid}.{ext}`. You can upload only into your own folder and read your own; managers and the owner read all. It uses the same "Take photo / Choose file" picker and photo shrinking as purchases (`components/document-picker.tsx`).
+  - Staff see only their own requests. Managers and the owner decide them on **Leave requests** through `decide_leave`: they can adjust the hours when approving, a decline needs a note, and a decision is final. You can't decide your own (the owner can).
+  - **Food safety:** the form asks "Do you have vomiting or diarrhoea?". If yes, you're clocked out straight away and `start_shift` refuses with "Your manager needs to clear you to return to work after illness" until a manager clears you. Clearing is separate from approving: even a declined request still has to be cleared.
+  - **Staff sickness** (managers): the MPI staff sickness record (name, date sick, date cleared, cleared by) with "Clear to return". The 48-hour symptom-free reminder needs a tick-box before it can be submitted.
+  - `needs_clearance()` only says whether *you* need clearing, so nobody can look up a colleague's illness.
+- **Training records** (`/training`, ninth migration): managers and the owner record training they gave (topic, date, notes). Their login is their trainer signature, stamped by the database.
+  - The trainee sees "Training to confirm" and taps Confirm (`confirm_training`). Logging in is their signature; drawing one with a finger is optional and is stored as a PNG in the private `signatures` bucket.
+  - After both have signed, a trigger locks the record. Before that, only the trainee's confirmation can be added. Nobody can edit or delete records through the API.
+  - **Training matrix** (managers): staff down the side, topics across, the latest date in each cell. Dates the trainee hasn't confirmed yet are marked with `*`.
+- **Hours and leave export** (owner only, More > Export hours and leave): a CSV of shifts and approved leave for a date range (up to 92 days): name, site, date, start, end, hours, type, edit note. Leave rows put their first and last day in Start and End. The route returns 403 for anyone but the owner and fetches in pages, so it isn't cut off at the API's 1,000-row limit.
+- **More menu** (`/more`): Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Export hours and leave. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Time** (`/time`): your current shift ("On shift at Orewa Cafe since 9:02 am") and this week's shifts with total hours. Missing clock-outs show as "your manager will fix it" and count zero hours. Managers and the owner also see the "Needs fixing" list.
-- **Bottom navigation**: Records, Time, Purchases and More (PIN and sign out).
+- **Bottom navigation**: Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
-- **Tests**: unit tests for NZ dates, record validation, shift hours and purchases (GST maths, CSV, file checks) in `web/lib/*.test.ts`; pgTAP tests for checklist, records, shift-access, temperature-limit, purchase and invoice-storage rules (`supabase/tests/`).
+- **Tests**: unit tests in `web/lib/*.test.ts` for:
+  - NZ dates, record validation and shift hours
+  - purchases (GST maths, CSV)
+  - shared upload and CSV helpers (`uploads.ts`, `csv.ts`)
+  - leave validation, the training matrix and the hours CSV
+
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave and training, including the storage policies.
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -91,9 +109,18 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 - ~~**Fix clock-out screen.**~~ Done: "Needs fixing" on `/time` for managers and the owner.
 - **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. Change both together, or move the number into a settings table.
 - **Night shifts longer than 14 hours** would be treated as forgotten. Fine for now; revisit if a site ever runs one.
+- **Sick leave:**
+  - **Add a certificate later:** a certificate can only be attached when asking for leave. Doctors' notes often come afterwards; add an "attach certificate" step for pending or approved requests.
+  - **Leave in the hours export:** a leave request is one row with its total hours, even if it runs past the export's end date. Split by day if payroll needs it.
+  - **Leave balances and the Employment Leave Act 2026:** nothing tracks how many sick leave hours each person has left. Check the Act's rules with the owner and accountant before building balances.
+  - **Notify managers** of new requests and vomiting/diarrhoea reports (part of the Slack work).
+- **Training:**
+  - **Refreshers:** no "due again" dates yet. Add how often each topic must be refreshed and highlight overdue cells in the matrix.
+  - **Leavers:** the matrix lists every staff row. Add an `active` flag to staff when someone leaves.
+- **Orphaned uploads** (all three buckets): a file uploaded just before the browser closes stays with no record pointing at it. One scheduled job can clean `invoices`, `leave-documents` and `signatures` (files older than a day that nothing uses).
 - **Purchases:**
-  - **Orphaned invoice files:** if the browser closes between uploading the file and saving the purchase, the file stays in Storage with no purchase. Clean these up with a scheduled job later (files older than a day that no purchase points at).
-  - **Hosted bucket:** `config.toml` only creates the `invoices` bucket locally. Before go-live, run `npx supabase seed buckets --remote` (or create it in the dashboard with the same settings).
+  - **Export row limit:** the purchases page and CSV read up to 1,000 rows in one request. Page through like the hours export does if a month ever has more.
+  - **Hosted buckets:** `config.toml` only creates the buckets (`invoices`, `leave-documents`, `signatures`) locally. Before go-live, run `npx supabase seed buckets --remote` (or create them in the dashboard with the same settings).
   - **HEIC photos:** "Choose file" with an iPhone HEIC photo only works in Safari (other browsers can't open HEIC to shrink it). The camera button always gives a JPEG.
   - **Xero:** push purchases as bills instead of the CSV once the Xero connection exists.
 - **Shift reports for payroll:** hours per person per week across all sites, for managers and the owner.
