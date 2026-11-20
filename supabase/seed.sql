@@ -306,3 +306,16 @@ where required_daily is distinct from (code in (
   'opening_checks_restaurant',
   'cleaning'
 ));
+
+-- Sample notices (notice board). posted_by is set because the seed runs
+-- without a login (auth.uid() is empty). Safe to re-run.
+insert into notices (id, title, body, site_ids, pinned, needs_ack, posted_by) values
+  ('70000000-0000-0000-0000-000000000001',
+   'New allergen labels from Monday',
+   E'From Monday every container in the chiller gets the new allergen label.\n\nThe labels are in the top drawer at each site. Ask your manager if you are unsure which allergens to tick.',
+   null, true, true, 'd0000000-0000-0000-0000-000000000001'),
+  ('70000000-0000-0000-0000-000000000002',
+   'Sandringham truck: gas bottles moved',
+   E'Spare gas bottles are now in the locked cage behind the truck, not under the counter.',
+   array['00000000-0000-0000-0000-000000000003'::uuid], false, false, 'd0000000-0000-0000-0000-000000000002')
+on conflict (id) do nothing;
