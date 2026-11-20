@@ -23,7 +23,7 @@ export default async function SettingsPage() {
 
   const manager = isManager(me);
   const [{ data: prefRow }, { data: sites }] = await Promise.all([
-    supabase.from("notification_prefs").select("notices, roster, reminders, approvals").maybeSingle(),
+    supabase.from("notification_prefs").select("notices, roster, reminders, approvals, payslips").maybeSingle(),
     manager
       ? supabase.from("sites").select("id, name, opens_at, trading_days").eq("active", true).order("name")
       : Promise.resolve({ data: null }),

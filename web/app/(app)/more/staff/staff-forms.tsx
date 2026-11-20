@@ -9,6 +9,7 @@ import {
   inviteStaff,
   resendInvite,
   setActive,
+  setPayrollCode,
   type InviteState,
   type StaffActionState,
 } from "./actions";
@@ -178,5 +179,38 @@ export function StaffActions({ person }: { person: Person }) {
         <FormMessage ok={activeState.ok} message={activeState.message} />
       </div>
     </div>
+  );
+}
+
+// ---- Payroll code -------------------------------------------------------------------------
+
+/** The code in Crystal Payroll. Payslip PDFs are matched to people by it. */
+export function PayrollCodeForm({ person }: { person: { id: string; payrollCode: string | null } }) {
+  const [state, action, pending] = useActionState(setPayrollCode, initial);
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="staffId" value={person.id} />
+      <label htmlFor={`payroll-${person.id}`} className="block text-sm font-semibold text-ink">
+        Payroll code <span className="font-normal text-muted">(from Crystal Payroll, for matching payslips)</span>
+      </label>
+      <div className="flex gap-2">
+        <input
+          key={person.payrollCode ?? ""}
+          id={`payroll-${person.id}`}
+          name="payrollCode"
+          defaultValue={person.payrollCode ?? ""}
+          maxLength={20}
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          placeholder="For example E012"
+          className="min-h-12 min-w-0 flex-1 rounded-xl border border-muted bg-white px-3 text-base text-ink focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none"
+        />
+        <button type="submit" disabled={pending} className={`${secondaryButton} w-auto shrink-0`}>
+          {pending ? "Saving…" : "Save code"}
+        </button>
+      </div>
+      <FormMessage ok={state.ok} message={state.message} />
+    </form>
   );
 }

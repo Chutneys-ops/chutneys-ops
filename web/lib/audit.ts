@@ -71,6 +71,7 @@ const TABLES: Record<string, [string, string]> = {
   push_subscriptions: ["Notification devices", "notification device"],
   notification_prefs: ["Notification settings", "notification setting"],
   sent_notifications: ["Reminders sent", "reminder"],
+  payslips: ["Payslips", "payslip"],
 };
 
 /** "purchases" -> "Purchases"; unknown tables -> the raw name. */
@@ -212,6 +213,19 @@ const COLUMNS: Record<string, string> = {
   for_date: "For date",
   dedupe_key: "Reminder key",
   sent_at: "Sent at",
+  payslips: "Payslips",
+  payroll_code: "Payroll code",
+  pay_date: "Pay date",
+  period_start: "Period from",
+  period_end: "Period to",
+  file_path: "File",
+  source: "Came from",
+  uploaded_by: "Uploaded by",
+  uploaded_at: "Uploaded at",
+  viewed_at: "First opened",
+  withdrawn_at: "Withdrawn at",
+  withdrawn_by: "Withdrawn by",
+  withdrawn_reason: "Why withdrawn",
 };
 
 // Where a column means something different in one table.
@@ -225,6 +239,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   "notices.edited_at": "Edited at",
   "roster_shifts.created_by": "Rostered by",
   "sent_notifications.kind": "Reminder",
+  "payslips.staff_id": "For",
 };
 
 /** Friendly column name; the raw name if there's no label. */
@@ -255,6 +270,8 @@ const STAFF_COLUMNS = new Set([
   "deactivated_by",
   "posted_by",
   "published_by",
+  "uploaded_by",
+  "withdrawn_by",
 ]);
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;

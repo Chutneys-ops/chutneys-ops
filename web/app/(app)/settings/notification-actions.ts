@@ -77,7 +77,7 @@ export async function sendTest(): Promise<Result> {
   return { ok: false, message: "The push service didn't accept it. Try again in a minute." };
 }
 
-/** One switch (notices, roster, reminders, approvals). */
+/** One switch (notices, roster, reminders, approvals, payslips). */
 export async function setPref(category: string, on: boolean): Promise<Result> {
   const { supabase, userId } = await signedIn();
   if (!userId) return SIGNED_OUT;

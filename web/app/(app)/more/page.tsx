@@ -64,6 +64,7 @@ export default async function MorePage() {
     },
     { href: "/leave", label: "Leave", hint: "Request sick leave and see your requests" },
     { href: "/training", label: "Training", hint: "Your training records" },
+    { href: "/payslips", label: "My payslips", hint: "Your payslips as PDFs" },
     { href: "/settings", label: "Settings", hint: isManager(me) ? "Your password and sign-off PIN" : "Your password" },
   ];
   const managing: Item[] = [
@@ -75,6 +76,7 @@ export default async function MorePage() {
   ];
   if (me.role === "owner") {
     managing.unshift({ href: "/more/staff", label: "Staff", hint: "Invite people, change roles, turn off leavers" });
+    managing.push({ href: "/more/payslips", label: "Payslips", hint: "Upload a pay run, publish, see who opened theirs" });
     managing.push({ href: "/more/export", label: "Export hours and leave", hint: "CSV for payroll" });
     managing.push({ href: "/more/audit", label: "Audit log", hint: "Who changed what, and when" });
   }

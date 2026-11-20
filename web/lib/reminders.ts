@@ -12,8 +12,8 @@ import { isTradingDay } from "./trading-days.ts";
 
 // ---- Switches ------------------------------------------------------------------------
 
-/** The four switches in Settings > Notifications (columns of notification_prefs). */
-export const CATEGORIES = ["notices", "roster", "reminders", "approvals"] as const;
+/** The switches in Settings > Notifications (columns of notification_prefs). */
+export const CATEGORIES = ["notices", "roster", "reminders", "approvals", "payslips"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type Prefs = Record<Category, boolean>;
 
@@ -22,16 +22,17 @@ export const CATEGORY_LABELS: Record<Category, { label: string; hint: string }> 
   roster: { label: "Roster", hint: "Your shifts are up or changed, and the evening before a shift" },
   reminders: { label: "Reminders", hint: "Fridge temperatures and opening checks not done yet" },
   approvals: { label: "Approvals", hint: "Your leave is decided. Managers: hours and leave waiting" },
+  payslips: { label: "Payslips", hint: "Your payslip is ready" },
 };
 
 /** No row in notification_prefs means everything on. */
-export const DEFAULT_PREFS: Prefs = { notices: true, roster: true, reminders: true, approvals: true };
+export const DEFAULT_PREFS: Prefs = { notices: true, roster: true, reminders: true, approvals: true, payslips: true };
 
 export function isCategory(value: string): value is Category {
   return (CATEGORIES as readonly string[]).includes(value);
 }
 
-/** A notification_prefs row (or nothing) -> all four switches. */
+/** A notification_prefs row (or nothing) -> every switch. */
 export function prefsFrom(row: Partial<Record<Category, boolean | null>> | null | undefined): Prefs {
   const prefs = { ...DEFAULT_PREFS };
   for (const c of CATEGORIES) {
