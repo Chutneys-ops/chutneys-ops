@@ -66,6 +66,8 @@ const TABLES: Record<string, [string, string]> = {
   checklist_ticks: ["Checklist ticks (old)", "checklist tick"],
   notices: ["Notices", "notice"],
   notice_reads: ["Notice reads", "notice read"],
+  roster_weeks: ["Roster weeks", "roster week"],
+  roster_shifts: ["Roster shifts", "rostered shift"],
 };
 
 /** "purchases" -> "Purchases"; unknown tables -> the raw name. */
@@ -190,6 +192,13 @@ const COLUMNS: Record<string, string> = {
   notice_id: "Notice",
   read_at: "Read at",
   acknowledged_at: "Acknowledged at",
+  week_start: "Week starting",
+  published_at: "Published at",
+  published_by: "Published by",
+  changed_at: "Changed since published",
+  roster_week_id: "Roster week",
+  position: "Position",
+  updated_at: "Updated at",
 };
 
 // Where a column means something different in one table.
@@ -201,6 +210,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   "record_templates.code": "Code",
   "temp_units.name": "Unit",
   "notices.edited_at": "Edited at",
+  "roster_shifts.created_by": "Rostered by",
 };
 
 /** Friendly column name; the raw name if there's no label. */
@@ -230,6 +240,7 @@ const STAFF_COLUMNS = new Set([
   "created_by",
   "deactivated_by",
   "posted_by",
+  "published_by",
 ]);
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -371,6 +382,19 @@ export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_L
         return `Acknowledged ${title === "a notice" ? title : `"${cut(title)}"`}`;
       }
       break;
+    }
+    case "roster_weeks": {
+      const site = lookups.sites[str(row, "site_id") ?? ""] ?? "a site";
+      const week = str(row, "week_start") ?? "";
+      if (action === "insert") return `Started the ${site} roster for the week of ${week}`;
+      if (changed(entry, "published_at")) return `Published the ${site} roster for the week of ${week}`;
+      if (becameSet(entry, "changed_at")) return `Changed the published ${site} roster for the week of ${week}`;
+      break;
+    }
+    case "roster_shifts": {
+      const date = str(row, "work_date") ?? "";
+      if (action === "insert") return `Rostered ${person("staff_id")} on ${date}`;
+      return `Changed ${person("staff_id")}'s rostered shift on ${date}`;
     }
     case "training_records": {
       const topic = str(row, "topic");

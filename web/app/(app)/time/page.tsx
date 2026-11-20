@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { MyShiftItem } from "@/components/my-shifts";
 import { NotStaff } from "@/components/not-staff";
 import { hoursText } from "@/lib/breaks";
 import { aucklandDate } from "@/lib/dates";
 import { weekStart } from "@/lib/hours";
 import { shortYmd } from "@/lib/leave";
+import { addDays, compareToRoster, differenceTexts, nextShift, shiftTimesText, type RosteredForCompare } from "@/lib/roster";
+import { loadMyShifts } from "@/lib/supabase/roster";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentShift, getSession, isManager, type Me } from "@/lib/supabase/session";
 import {
@@ -26,6 +29,8 @@ type TimesheetRow = {
   work_date: string;
   start_time: string;
   finish_time: string;
+  start_at: string;
+  finish_at: string;
   minutes_at_work: number;
   rest_breaks: number;
   meal_breaks: number;
@@ -39,7 +44,7 @@ type TimesheetRow = {
 // timesheets links to staff four times (staff_id, approved_by, created_by,
 // edited_by), so the join names the person's link.
 const SELECT =
-  "id, staff_id, site_id, work_date, start_time, finish_time, minutes_at_work, rest_breaks, meal_breaks, " +
+  "id, staff_id, site_id, work_date, start_time, finish_time, start_at, finish_at, minutes_at_work, rest_breaks, meal_breaks, " +
   "paid_minutes, status, edit_note, person:staff!timesheets_staff_id_fkey(name), site:sites(name)";
 
 const statusClass: Record<TimesheetStatus, string> = {
@@ -56,6 +61,33 @@ function breaksText(t: TimesheetRow): string {
   const rest = t.rest_breaks ? `${t.rest_breaks} x 10 min rest` : "no rest break";
   const meal = t.meal_breaks ? `${t.meal_breaks} x 30 min meal` : "no meal break";
   return `${hoursText(t.minutes_at_work)} at work · ${rest} · ${meal} · ${hoursText(t.paid_minutes)} paid`;
+}
+
+/** Rostered vs actual for one timesheet waiting for approval: the rostered
+ *  shift (same person, day and site, in a published week), and differences
+ *  of more than 15 minutes, or "Not rostered". */
+function RosterCheck({ t, rostered }: { t: TimesheetRow; rostered: RosteredForCompare[] }) {
+  const c = compareToRoster(t, rostered);
+  if (c.status === "not_rostered") {
+    return (
+      <p className="mt-1 inline-flex rounded-full bg-warning-light px-2 py-0.5 text-xs font-semibold text-warning">
+        Not rostered
+      </p>
+    );
+  }
+  const differences = differenceTexts(c);
+  return (
+    <p className="mt-1 text-sm text-muted">
+      Rostered {shiftTimesText(c.shift)}
+      {differences.length === 0 ? (
+        <span className="text-primary-dark"> · matches</span>
+      ) : (
+        <span className="ml-1 inline-flex rounded-full bg-warning-light px-2 py-0.5 text-xs font-semibold text-warning">
+          {differences.join(" · ")}
+        </span>
+      )}
+    </p>
+  );
 }
 
 /** Edit (and delete, while submitted) one timesheet, folded away. */
@@ -144,6 +176,29 @@ export default async function TimePage() {
   const weekPaid = week.reduce((sum, t) => sum + t.paid_minutes, 0);
   const groups = groupForApproval(pending.map((t) => ({ ...t, site_name: t.site?.name ?? "A closed site" })));
 
+  // Your shifts this week and next (published weeks only: RLS), and for
+  // managers the rostered shifts to compare with the hours waiting.
+  const pendingDates = pending.map((t) => t.work_date).sort();
+  const [mine, rosteredResult] = await Promise.all([
+    loadMyShifts(supabase, userId, monday, addDays(monday, 13)),
+    manager && pending.length > 0
+      ? supabase
+          .from("roster_shifts")
+          .select("staff_id, site_id, work_date, start_time, finish_time, start_at, finish_at, roster_weeks!inner(published_at)")
+          .not("roster_weeks.published_at", "is", null)
+          .in("staff_id", [...new Set(pending.map((t) => t.staff_id))])
+          .gte("work_date", pendingDates[0])
+          .lte("work_date", pendingDates[pendingDates.length - 1])
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const rostered = (rosteredResult.data ?? []) as unknown as RosteredForCompare[];
+  const upNext = nextShift(mine.shifts, new Date());
+  // The next shift is shown up top, so the lists below leave it out.
+  const others = mine.shifts.filter((s) => s.id !== upNext?.id);
+  const thisWeekShifts = others.filter((s) => s.work_date < addDays(monday, 7));
+  const nextWeekShifts = others.filter((s) => s.work_date >= addDays(monday, 7));
+
   return (
     <main className="mx-auto w-full max-w-md px-4 py-6">
       <h1 className="text-3xl font-bold">Time</h1>
@@ -171,6 +226,46 @@ export default async function TimePage() {
           Could not load timesheets: {error.message}
         </p>
       )}
+
+      <section className="mt-4 rounded-[14px] border border-line bg-white p-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold">My shifts</h2>
+          {manager && (
+            <Link href="/roster" className="inline-flex min-h-12 items-center text-sm font-semibold text-primary hover:text-primary-dark">
+              Roster
+            </Link>
+          )}
+        </div>
+        {mine.error && (
+          <p role="alert" className="mt-1 text-sm text-warning">
+            Could not load your shifts: {mine.error}
+          </p>
+        )}
+        {upNext && (
+          <div className="mt-2 rounded-xl bg-primary-light p-3">
+            <MyShiftItem shift={upNext} label="Next shift" />
+          </div>
+        )}
+        {[
+          { title: "This week", shifts: thisWeekShifts },
+          { title: "Next week", shifts: nextWeekShifts },
+        ].map((part) => (
+          <div key={part.title} className="mt-3">
+            <h3 className="text-sm font-semibold tracking-wide text-muted uppercase">{part.title}</h3>
+            {part.shifts.length === 0 ? (
+              <p className="mt-1 text-sm text-muted">{upNext ? "No other shifts." : "No shifts published yet."}</p>
+            ) : (
+              <ul className="mt-1 divide-y divide-line">
+                {part.shifts.map((s) => (
+                  <li key={s.id} className="py-2">
+                    <MyShiftItem shift={s} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </section>
 
       <section className="mt-4 rounded-[14px] border border-line bg-white p-4">
         <h2 className="text-lg font-semibold">Add my hours</h2>
@@ -252,6 +347,7 @@ export default async function TimePage() {
                           <p className="text-sm text-muted">
                             {shortYmd(t.work_date)} · {times(t)}
                           </p>
+                          <RosterCheck t={t} rostered={rostered} />
                           {t.edit_note && <p className="text-sm text-ink">Note: {t.edit_note}</p>}
                           {t.staff_id === me.id && me.role !== "owner" && (
                             <p className="text-sm text-muted">Your own: another manager or the owner approves it.</p>

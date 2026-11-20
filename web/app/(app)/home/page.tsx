@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { InstallCard } from "@/components/install-card";
+import { MyShiftItem } from "@/components/my-shifts";
 import { NotStaff } from "@/components/not-staff";
 import { hoursText } from "@/lib/breaks";
 import { pickMessage } from "@/lib/daily-messages";
@@ -10,8 +11,10 @@ import { countCards, dueToday, firstName, greeting, sumPurchases, type TemplateL
 import { weekStart } from "@/lib/hours";
 import { needsYou } from "@/lib/notices";
 import { LEAVE_STATUS_LABELS, dateRangeText, type LeaveStatus } from "@/lib/leave";
+import { addDays, nextShift } from "@/lib/roster";
 import { currentMonth, formatMoney, monthLabel, monthRange } from "@/lib/purchases";
 import { loadMyInbox } from "@/lib/supabase/notices";
+import { loadMyShifts } from "@/lib/supabase/roster";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentShift, getSession, isManager } from "@/lib/supabase/session";
 
@@ -78,6 +81,7 @@ export default async function HomePage() {
     staffToClear,
     purchases,
     myNotices,
+    myShifts,
   ] = await Promise.all([
     supabase.rpc("needs_clearance"),
     shift
@@ -145,9 +149,14 @@ export default async function HomePage() {
       : 0,
     owner ? purchasesThisMonth(supabase) : null,
     loadMyInbox(supabase, userId),
+    // Published shifts to the end of next week. From yesterday, so a night
+    // shift that started yesterday and is still on counts as "next".
+    loadMyShifts(supabase, userId, addDays(today, -1), addDays(weekStart(today), 13)),
   ]);
 
   const needsClearance = clearance.data === true;
+  const upNext = nextShift(myShifts.shifts, now);
+  const moreShifts = myShifts.shifts.filter((s) => s.id !== upNext?.id && Date.parse(s.finish_at) > now.getTime()).length;
   // Unread, or waiting for your acknowledgement; already pinned first, then newest.
   const waitingNotices = myNotices.items.filter(needsYou);
   const sheets = ((sheetsResult.data ?? []) as { template_code: string; record_entries: { count: number }[] }[]).map(
@@ -237,6 +246,32 @@ export default async function HomePage() {
               Choose site
             </Link>
           </>
+        )}
+      </section>
+
+      {/* Your next rostered shift */}
+      <section className={card}>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold">My shifts</h2>
+          <Link href="/time" className="inline-flex min-h-12 items-center text-sm font-semibold text-primary hover:text-primary-dark">
+            All shifts
+          </Link>
+        </div>
+        {upNext ? (
+          <>
+            <div className="rounded-xl bg-primary-light p-3">
+              <MyShiftItem shift={upNext} label="Next shift" />
+            </div>
+            {moreShifts > 0 && (
+              <p className="mt-2 text-sm text-muted">
+                {moreShifts} more {moreShifts === 1 ? "shift" : "shifts"} this week and next.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-[15px] text-muted">
+            {myShifts.error ? `Could not load your shifts: ${myShifts.error}` : "No shifts published for you yet."}
+          </p>
         )}
       </section>
 

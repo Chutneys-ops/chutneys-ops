@@ -19,3 +19,26 @@ export async function notifyNewNotice(notice: NewNoticeAlert): Promise<void> {
   // on. Never let a failed push fail the post: catch and log here.
   void notice;
 }
+
+export type RosterPublishedAlert = {
+  weekId: string;
+  siteId: string;
+  /** The Monday, "YYYY-MM-DD". */
+  weekStart: string;
+  /** Everyone rostered that week at that site. */
+  staffIds: string[];
+  /** false: first publish ("Your shifts for the week of ... are up").
+   *  true: a published week changed and was published again ("Your shifts changed"). */
+  republished: boolean;
+};
+
+/** Tell the people on a week's roster that it has been published, or that a
+ *  published week has changed. Called by the roster's Publish / Re-publish
+ *  action AFTER publish_roster_week succeeds. */
+export async function notifyRosterPublished(alert: RosterPublishedAlert): Promise<void> {
+  // TODO(slice 7): push "Your shifts for the week of <date> are up" (or
+  // "Your shifts changed") to each person in staffIds who has turned
+  // notifications on, opening /time. Never let a failed push fail the
+  // publish: catch and log here.
+  void alert;
+}

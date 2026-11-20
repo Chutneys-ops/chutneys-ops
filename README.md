@@ -99,7 +99,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Never deleted:** no delete grants, and a trigger refuses deletes. Only the managers' columns can be written; `posted_by` and `posted_at` are fixed.
   - The rules for the audience, unread counts, read counts, form checks and expiry are in `web/lib/notices.ts`, with tests.
   - **Phone notifications:** `notifyNewNotice()` in `web/lib/notify.ts` is called after a new notice is saved. It does nothing yet (TODO for slice 7).
-- **More menu** (`/more`): Notices, Leave, Training, Settings and Sign out. Managers also see Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
+- **More menu** (`/more`): Notices, Leave, Training, Settings and Sign out. Managers also see Roster, Leave requests, Staff sickness and Training matrix; the owner also sees Staff, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Per-unit temperature limits** (sixth migration): fridge readings are checked against each unit's own `min_c`/`max_c` (fridges 0 to 5 C, freezers -25 to -15 C). The seed adds sample fridges and freezers at every site.
 - **Timesheets** (`/time`, eleventh migration): hours are entered by hand, not clocked.
   - **Add my hours:** date, site, start and finish. A finish earlier than the start means the next morning. A live preview shows, for example, "7 h at work, 2 x 10 min paid rest, 1 x 30 min meal, 6.5 h paid".
@@ -111,6 +111,17 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
     - "Add hours for someone".
     - Adding or changing someone else's hours needs a note, and so does changing approved hours.
     - Approved hours are locked for staff and can't be deleted.
+- **Rosters** (`/roster`, seventeenth migration): managers and the owner plan each site's week (Monday to Sunday) and publish it; staff see their shifts.
+  - **Tables:** `roster_weeks` (one per site per week: published at/by, "changed since published") and `roster_shifts` (person, day, start, finish, optional position and note). Like timesheets, a finish earlier than the start is the next morning, the database stores the real Auckland instants, and breaks and paid minutes come from `nz_breaks()` in a trigger. The browser can't write them (column grants).
+  - **No double-booking:** one person can't have overlapping shifts at any site (an exclusion constraint). A turned-off person can't be rostered, or be given someone's shift.
+  - **Who sees what:** only managers and the owner add, change, delete and publish. Staff see only their own shifts, and only in published weeks. "Who's on with me" (`roster_coworkers()`) gives them the names and times of others at the same site that day, nothing else.
+  - **The roster page:** site and week pickers, one section per day, Add shift (with the live breaks preview), Change and Delete, Copy last week (`copy_roster_week`: skips shifts that would overlap or are for turned-off people, so running it twice adds nothing), Publish / Re-publish, and paid-hour totals per person and for the week.
+  - **Publishing** (`publish_roster_week`) stamps the time and the person. Any change to a published week marks it "changed since published" until it's published again.
+  - **Warnings, not blocks** (`roster_warnings()`): someone on approved leave that day, or over 40 paid hours rostered in the week across all sites. The 40 is also `OVER_HOURS_LIMIT` in `web/lib/roster.ts`; a unit test reads the migration so they can't differ.
+  - **Staff:** "My shifts" on Home (next shift up top) and on Time (this week and next), each with "Who's on with me".
+  - **Timesheet approval:** each timesheet waiting shows the rostered shift for that person, day and site (published weeks only), and flags a start or finish more than 15 minutes away, or "Not rostered".
+  - **Phone notifications:** `notifyRosterPublished()` in `web/lib/notify.ts` is called after a publish or re-publish. It does nothing yet (TODO for slice 7).
+  - The week dates, form checks, totals, warning text and the rostered-vs-actual comparison are in `web/lib/roster.ts`, with tests.
 - **Bottom navigation**: Home, Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests in `web/lib/*.test.ts` for:
@@ -121,8 +132,9 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - leave validation, the training matrix and the hours CSV
   - staff accounts (statuses, invite checks) and password rules
   - notices (audience, inbox, read counts, form checks, expiry dates)
+  - rosters (week dates, the shift form, totals, warnings, next shift, rostered vs actual)
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
 - **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
 
@@ -192,6 +204,11 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - **The 30-day rule lives in two places:** `my_recent_site_ids()` in the database and `RECENT_SITE_DAYS` in `web/lib/notices.ts` (for the managers' read counts). A unit test reads the migration and fails if they differ.
   - **Audit log size:** every read and acknowledgement is an audit row (all tables are audited). Fine for a small team; revisit with the audit retention decision.
   - **Push notifications:** slice 7 fills in `notifyNewNotice()`.
+- **Rosters:**
+  - **Edits show straight away:** staff see changes to a published week as soon as a manager saves them, before Re-publish. "Changed since published" only tells the manager to re-publish (and, from slice 7, to notify). Keep a published snapshot if half-finished edits turn out to confuse people.
+  - **Pending leave** doesn't warn, only approved leave. Add it if managers want an earlier heads-up.
+  - **Positions** are free text with suggestions. Make them a list per site if reports by position are wanted.
+  - **Unpublish** isn't possible; a published week can only be changed and re-published.
 - **The 14-hour rule lives in two places:** `stale_shift_cutoff()` in the database and `STALE_HOURS` in `web/lib/hours.ts`. It now only decides how long a site choice lasts. Change both together, or move the number into a settings table.
 - **Sick leave:**
   - **Add a certificate later:** a certificate can only be attached when asking for leave. Doctors' notes often come afterwards; add an "attach certificate" step for pending or approved requests.
