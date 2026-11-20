@@ -53,6 +53,7 @@ export default async function MorePage() {
   ];
   if (me.role === "owner") {
     managing.push({ href: "/more/export", label: "Export hours and leave", hint: "CSV for payroll" });
+    managing.push({ href: "/more/audit", label: "Audit log", hint: "Who changed what, and when" });
   }
 
   return (
