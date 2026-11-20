@@ -24,14 +24,14 @@ insert into storage.objects (bucket_id, name, owner_id) values
 
 -- Act as Ana (staff) ---------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into training_records (topic, trainee_id) values ('allergens', 'b0000000-0000-0000-0000-00000000000b') $$,
   '42501', null, 'Staff cannot create training records');
 
 -- Act as Mia (manager) -------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into training_records (topic, trainee_id, notes) values ('allergens', 'a0000000-0000-0000-0000-00000000000a', 'Ana allergens') $$,
@@ -67,7 +67,7 @@ select throws_ok(
   '23514', null, 'A manager cannot record training for herself');
 
 -- Act as Ana -----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select array_agg(notes) from training_records),
@@ -107,7 +107,7 @@ select is(
   'Confirming twice changes nothing');
 
 -- Act as Ben -----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select confirm_training('00000000-0000-0000-0000-000000000000'::uuid, null) $$,

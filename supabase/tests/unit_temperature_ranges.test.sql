@@ -32,7 +32,7 @@ insert into record_templates (code, title, period, site_kinds, fields) values
 
 -- Act as Ana -----------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 insert into record_sheets (site_id, template_code) values ('10000000-0000-0000-0000-00000000000a', 'test_unit_temps');
 

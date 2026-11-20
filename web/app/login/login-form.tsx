@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { LogoMark } from "@/components/logo-mark";
+import { markActiveNow } from "@/components/shared-device";
 import { login, type LoginState } from "./actions";
 
 const initialState: LoginState = { error: null };
@@ -16,6 +17,8 @@ export function LoginForm({ notice }: { notice: string | null }) {
   return (
     <form
       action={formAction}
+      // A shared tablet's 15-minute clock starts again for the new person.
+      onSubmit={markActiveNow}
       className="flex w-full max-w-sm flex-col gap-5 rounded-2xl border border-line bg-white p-6"
     >
       <div className="flex items-center gap-3">
@@ -73,6 +76,9 @@ export function LoginForm({ notice }: { notice: string | null }) {
         className="-mt-2 min-h-12 content-center text-center text-sm font-medium text-primary hover:text-primary-dark"
       >
         Forgot password?
+      </Link>
+      <Link href="/privacy" className="-mt-4 text-center text-sm text-muted hover:text-ink">
+        Privacy
       </Link>
     </form>
   );

@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { AppHeader, AppHeaderFallback } from "@/components/app-header";
 import { BottomNav } from "@/components/bottom-nav";
+import { SharedDeviceGuard } from "@/components/shared-device";
 
 // Wraps every signed-in page: /start, /records, /time, /purchases, /settings.
 // The (app) folder is a "route group": the brackets keep it out of the URL.
@@ -16,6 +17,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </Suspense>
       <div className="pb-(--nav-h)">{children}</div>
       <BottomNav />
+      {/* Shared tablets: sign out after 15 minutes without use. */}
+      <SharedDeviceGuard />
     </>
   );
 }

@@ -39,14 +39,14 @@ select throws_ok(
 
 -- Staff --------------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select set_site_trading_days('10000000-0000-0000-0000-00000000000a', '{1,2,3}') $$,
   '42501', null, 'Staff can''t change trading days');
 
 -- Manager ------------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ select set_site_trading_days('10000000-0000-0000-0000-00000000000a', '{5,1,3,1}') $$,
@@ -71,7 +71,7 @@ select is(
   '{1,3,5}'::smallint[], 'Trading days can''t be changed directly through the API');
 
 -- Owner --------------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select lives_ok(
   $$ select set_site_trading_days('10000000-0000-0000-0000-00000000000a', '{6,7}') $$,
   'The owner can change trading days');

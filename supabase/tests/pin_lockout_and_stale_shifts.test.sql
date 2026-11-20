@@ -41,7 +41,7 @@ insert into record_entries (sheet_id, "values", recorded_by) values
 
 -- 1. PIN lockout, as Mia --------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal2"}', true);
 select set_my_pin('1234');
 
 select is(sign_off_sheet('52000000-0000-0000-0000-000000000001', '0000')->>'status', 'wrong_pin', 'wrong PIN 1 is refused');
@@ -92,7 +92,7 @@ select is(
 set local role authenticated;
 
 -- 2. Forgotten clock-outs, as Ana (open shift from 15 hours ago) ----------------
-select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}', true);
 
 select is(on_shift_at('12000000-0000-0000-0000-00000000000a'), false,
   'a 15-hour-old open shift no longer counts as being on shift');
@@ -136,7 +136,7 @@ select lives_ok(
   'and the sheet that was refused earlier can now be started');
 
 -- Ben clocks out 20 hours late: no 20-hour shift either.
-select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000003","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000003","role":"authenticated","aal":"aal2"}', true);
 select clock_out();
 reset role;
 select is(
@@ -146,7 +146,7 @@ select is(
 set local role authenticated;
 
 -- 3. Mia fixes Ana's forgotten clock-out ------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select fix_clock_out('42000000-0000-0000-0000-000000000002', now() - interval '7 hours', '') $$,
@@ -166,7 +166,7 @@ select is(
   'fix_clock_out clears needs_review');
 
 -- Staff can't run the internal helper directly.
-select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000002","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a2000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}', true);
 select throws_ok(
   $$ select close_stale_shift('42000000-0000-0000-0000-000000000003') $$,
   '42501', null,

@@ -5,8 +5,10 @@
 //
 // Every action does the same two steps, in this order:
 //   1. ownerSession(): with the CALLER'S OWN session (publishable key +
-//      their cookies, so RLS applies), check they are an active owner.
-//      Nothing else happens if they aren't.
+//      their cookies, so RLS applies), ask the DATABASE is_owner(). That
+//      includes "signed in with their two-step code" (aal2): the staff row
+//      alone says owner even for a password-only sign-in, so it isn't
+//      enough before using the secret key. Nothing else happens if not.
 //   2. Only then use the admin client (SECRET key) for the Auth admin API:
 //      sending invites and banning logins. Database changes still go through
 //      the owner's own session (set_staff_role, set_staff_active, the staff
@@ -17,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/supabase/session";
 import { requestOrigin } from "@/lib/request-origin";
+import { limitPerson } from "@/lib/supabase/rate-limit";
 import { checkPayrollCode } from "@/lib/payslips";
 import { checkInvite, isRole, ROLE_LABELS } from "@/lib/staff";
 
@@ -30,11 +33,15 @@ const BAN_FOREVER = "876000h";
 
 type DbError = { code?: string; message: string };
 
-async function ownerSession() {
+type Owner = { supabase: Awaited<ReturnType<typeof createClient>>; userId: string };
+
+async function ownerSession(): Promise<Owner | null> {
   const supabase = await createClient();
   const { me } = await getSession(supabase);
   if (!me || me.role !== "owner" || !me.active) return null;
-  return supabase;
+  // The database's answer: active owner AND signed in with the code.
+  const { data: isOwner } = await supabase.rpc("is_owner");
+  return isOwner === true ? { supabase, userId: me.id } : null;
 }
 
 /** Our own database messages (no permission, can't lock yourself out, bad
@@ -43,7 +50,7 @@ function dbMessage(error: DbError, prefix: string): string {
   return ["42501", "23514", "22023"].includes(error.code ?? "") ? error.message : `${prefix}: ${error.message}`;
 }
 
-async function personName(supabase: NonNullable<Awaited<ReturnType<typeof ownerSession>>>, id: string) {
+async function personName(supabase: Owner["supabase"], id: string) {
   const { data } = await supabase.from("staff").select("name, email, active").eq("id", id).maybeSingle();
   return data as { name: string; email: string | null; active: boolean } | null;
 }
@@ -52,8 +59,9 @@ async function personName(supabase: NonNullable<Awaited<ReturnType<typeof ownerS
 
 export async function inviteStaff(prev: InviteState, formData: FormData): Promise<InviteState> {
   const seq = prev.seq + 1;
-  const supabase = await ownerSession();
-  if (!supabase) return { ...prev, seq, ok: false, message: "Only the owner can invite staff." };
+  const owner = await ownerSession();
+  if (!owner) return { ...prev, seq, ok: false, message: "Only the owner can invite staff." };
+  const { supabase } = owner;
 
   const checked = checkInvite({
     name: String(formData.get("name") ?? ""),
@@ -65,6 +73,9 @@ export async function inviteStaff(prev: InviteState, formData: FormData): Promis
 
   const { data: existing } = await supabase.from("staff").select("name").eq("email", email).maybeSingle();
   if (existing) return { ...prev, seq, ok: false, message: `${existing.name} is already on the list with ${email}.` };
+
+  const limit = await limitPerson(supabase, owner.userId, "invite");
+  if (!limit.allowed) return { ...prev, seq, ok: false, message: limit.message };
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -98,8 +109,9 @@ export async function inviteStaff(prev: InviteState, formData: FormData): Promis
 
 export async function resendInvite(prev: StaffActionState, formData: FormData): Promise<StaffActionState> {
   const seq = prev.seq + 1;
-  const supabase = await ownerSession();
-  if (!supabase) return { seq, message: "Only the owner can invite staff." };
+  const owner = await ownerSession();
+  if (!owner) return { seq, message: "Only the owner can invite staff." };
+  const { supabase } = owner;
 
   const id = String(formData.get("staffId") ?? "");
   if (!UUID_RE.test(id)) return { seq, message: "Staff member not found." };
@@ -112,6 +124,9 @@ export async function resendInvite(prev: StaffActionState, formData: FormData): 
   if (login?.joined) {
     return { seq, message: `${person.name} has already joined. They can use Forgot password on the sign-in page.` };
   }
+
+  const limit = await limitPerson(supabase, owner.userId, "invite");
+  if (!limit.allowed) return { seq, message: limit.message };
 
   const admin = createAdminClient();
   const redirectTo = `${await requestOrigin()}/auth/confirm`;
@@ -134,8 +149,9 @@ export async function resendInvite(prev: StaffActionState, formData: FormData): 
 
 export async function changeRole(prev: StaffActionState, formData: FormData): Promise<StaffActionState> {
   const seq = prev.seq + 1;
-  const supabase = await ownerSession();
-  if (!supabase) return { seq, message: "Only the owner can change roles." };
+  const owner = await ownerSession();
+  if (!owner) return { seq, message: "Only the owner can change roles." };
+  const { supabase } = owner;
 
   const id = String(formData.get("staffId") ?? "");
   const role = String(formData.get("role") ?? "");
@@ -155,8 +171,9 @@ export async function changeRole(prev: StaffActionState, formData: FormData): Pr
 
 export async function setActive(prev: StaffActionState, formData: FormData): Promise<StaffActionState> {
   const seq = prev.seq + 1;
-  const supabase = await ownerSession();
-  if (!supabase) return { seq, message: "Only the owner can turn accounts on or off." };
+  const owner = await ownerSession();
+  if (!owner) return { seq, message: "Only the owner can turn accounts on or off." };
+  const { supabase } = owner;
 
   const id = String(formData.get("staffId") ?? "");
   const makeActive = formData.get("active") === "true";
@@ -199,8 +216,9 @@ export async function setActive(prev: StaffActionState, formData: FormData): Pro
  *  PDFs (More > Payslips). Empty clears it. */
 export async function setPayrollCode(prev: StaffActionState, formData: FormData): Promise<StaffActionState> {
   const seq = prev.seq + 1;
-  const supabase = await ownerSession();
-  if (!supabase) return { seq, message: "Only the owner can change payroll codes." };
+  const owner = await ownerSession();
+  if (!owner) return { seq, message: "Only the owner can change payroll codes." };
+  const { supabase } = owner;
 
   const id = String(formData.get("staffId") ?? "");
   if (!UUID_RE.test(id)) return { seq, message: "Staff member not found." };
@@ -212,4 +230,38 @@ export async function setPayrollCode(prev: StaffActionState, formData: FormData)
 
   refresh();
   return { seq, ok: true, message: checked.code ? `Payroll code saved: ${checked.code}` : "Payroll code removed." };
+}
+
+// ---- Two-step sign-in -----------------------------------------------------------------------
+
+/** Lost phone: remove every authenticator the person has and sign them out
+ *  everywhere. A manager or owner sets up a new one at their next sign-in.
+ *  reset_staff_mfa() checks the owner again and records it (mfa_resets,
+ *  audit log). Never on yourself: see docs/RUNBOOK.md. */
+export async function resetTwoStep(prev: StaffActionState, formData: FormData): Promise<StaffActionState> {
+  const seq = prev.seq + 1;
+  const owner = await ownerSession();
+  if (!owner) return { seq, message: "Only the owner can reset two-step sign-in." };
+  const { supabase } = owner;
+
+  const id = String(formData.get("staffId") ?? "");
+  if (!UUID_RE.test(id)) return { seq, message: "Staff member not found." };
+
+  const limit = await limitPerson(supabase, owner.userId, "mfaReset");
+  if (!limit.allowed) return { seq, message: limit.message };
+
+  const { data: removed, error } = await supabase.rpc("reset_staff_mfa", { target_id: id });
+  if (error) return { seq, message: dbMessage(error, "Could not reset two-step sign-in") };
+
+  const person = await personName(supabase, id);
+  const name = person?.name ?? "They";
+  refresh();
+  return {
+    seq,
+    ok: true,
+    message:
+      removed === 0
+        ? `${name} had no authenticator set up. They've been signed out.`
+        : `${name}'s authenticator is removed and they're signed out. They'll set up a new one when they next sign in.`,
+  };
 }

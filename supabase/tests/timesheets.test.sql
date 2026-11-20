@@ -23,7 +23,7 @@ insert into sites (id, name, kind) values
 
 -- Act as Ana ---------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into timesheets (site_id, work_date, start_time, finish_time)
@@ -137,7 +137,7 @@ select throws_ok(
   'Staff cannot approve hours');
 
 -- Act as Mia (manager) ------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select count(*)::int from timesheets where staff_id = 'a0000000-0000-0000-0000-00000000000a'),
@@ -186,7 +186,7 @@ select is(
   'Mia''s own hours are still waiting');
 
 -- Back to Ana: approved rows are locked ----------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ update timesheets set finish_time = '18:00' where work_date = today_nz() $$,
@@ -200,7 +200,7 @@ select is(
   'Ana cannot delete an approved timesheet');
 
 -- Mia: approved rows change only with a new note ---------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ update timesheets set finish_time = '18:00'
@@ -219,7 +219,7 @@ select set_config('request.jwt.claims', '', true);
 insert into leave_requests (staff_id, reason, start_date, end_date, hours, gi_symptoms)
 values ('b0000000-0000-0000-0000-00000000000b', 'sick', today_nz() - 1, today_nz() - 1, 8, true);
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into timesheets (site_id, work_date, start_time, finish_time)
@@ -232,7 +232,7 @@ select lives_ok(
      values ('10000000-0000-0000-0000-00000000000a', today_nz() - 1, '07:00', '09:00') $$,
   'Hours on the day the illness started are fine');
 
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select lives_ok(
   $$ insert into timesheets (staff_id, site_id, work_date, start_time, finish_time, edit_note)
      values ('b0000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-00000000000a', today_nz(), '09:00', '12:00',

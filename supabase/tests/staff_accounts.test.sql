@@ -68,7 +68,7 @@ insert into auth.sessions (id, user_id) values
 
 -- Managers and staff can't change roles or active status -----------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select set_staff_role('a0000000-0000-0000-0000-00000000000a', 'manager') $$,
@@ -89,7 +89,7 @@ select throws_ok(
   $$ select * from staff_logins() $$,
   '42501', null, 'A manager cannot see who has joined');
 
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select set_staff_role('a0000000-0000-0000-0000-00000000000a', 'owner') $$,
@@ -105,7 +105,7 @@ select throws_ok(
   '42501', null, 'Staff cannot stamp invites');
 
 -- The owner ------------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select set_staff_role('d0000000-0000-0000-0000-00000000000d', 'manager') $$,
@@ -167,7 +167,7 @@ select is(
 set local role authenticated;
 
 -- Dee, turned off, with a token that hasn't expired yet ------------------------------
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 
 select ok(not on_shift_at('10000000-0000-0000-0000-00000000000a'), 'Dee no longer counts as on shift');
 select is((select count(*)::int from sites), 0, 'Dee sees no sites');
@@ -204,7 +204,7 @@ select throws_ok(
   '42501', null, 'Dee cannot upload files');
 
 -- Max, a turned-off manager ------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"f0000000-0000-0000-0000-00000000000f","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"f0000000-0000-0000-0000-00000000000f","role":"authenticated","aal":"aal2"}', true);
 
 select ok(not is_manager(), 'Max no longer counts as a manager');
 select throws_ok(
@@ -216,7 +216,7 @@ select throws_ok(
 
 -- Nobody can add anything FOR a turned-off person ---------------------------------------
 -- (active_staff_only triggers). Dee and Max are off; Ana is on.
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into timesheets (staff_id, site_id, work_date, start_time, finish_time, edit_note)
@@ -234,7 +234,7 @@ select throws_ok(
   'Max''s account is turned off, so you can''t add training for them. The owner can turn it back on in More > Staff.',
   'The owner cannot record training for a turned-off manager');
 
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into timesheets (staff_id, site_id, work_date, start_time, finish_time, edit_note)
@@ -249,7 +249,7 @@ select lives_ok(
   $$ insert into training_records (topic, trainee_id) values ('allergens', 'a0000000-0000-0000-0000-00000000000a') $$,
   'A manager can still record training for someone active');
 
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 select throws_ok(
   $$ insert into timesheets (site_id, work_date, start_time, finish_time)
      values ('10000000-0000-0000-0000-00000000000a', today_nz() - 1, '09:00', '13:00') $$,
@@ -288,7 +288,7 @@ select is(
 set local role authenticated;
 
 -- Turning back on ------------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select lives_ok(
   $$ select set_staff_active('e0000000-0000-0000-0000-00000000000e', true) $$,
   'The owner can turn Dee back on');
@@ -302,7 +302,7 @@ select lives_ok(
      values ('e0000000-0000-0000-0000-00000000000e', '10000000-0000-0000-0000-00000000000a', today_nz() - 1, '09:00', '13:00', 'Back') $$,
   'Once turned back on, hours can be added for Dee again');
 
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from timesheets), 2, 'Dee sees her timesheets again');
 
 select * from finish();

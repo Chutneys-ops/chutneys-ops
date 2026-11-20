@@ -65,7 +65,14 @@ export default async function MorePage() {
     { href: "/leave", label: "Leave", hint: "Request sick leave and see your requests" },
     { href: "/training", label: "Training", hint: "Your training records" },
     { href: "/payslips", label: "My payslips", hint: "Your payslips as PDFs" },
-    { href: "/settings", label: "Settings", hint: isManager(me) ? "Your password and sign-off PIN" : "Your password" },
+    {
+      href: "/settings",
+      label: "Settings",
+      hint: isManager(me)
+        ? "Password, two-step sign-in, this device, sign-off PIN"
+        : "Password, two-step sign-in, this device",
+    },
+    { href: "/privacy", label: "Your privacy", hint: "What the app records about you, and your rights" },
   ];
   const managing: Item[] = [
     { href: "/roster", label: "Roster", hint: "Plan and publish each site's week" },

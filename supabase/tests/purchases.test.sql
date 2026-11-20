@@ -37,7 +37,7 @@ insert into storage.objects (bucket_id, name, owner_id) values
 
 -- Act as Ana -----------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into purchases (site_id, supplier, description, total_incl_gst, payment_method, no_receipt_reason)
@@ -165,7 +165,7 @@ select is(
   'Ana sees only her own invoice file');
 
 -- Act as Ben -----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into purchases (site_id, supplier, description, total_incl_gst, payment_method, no_receipt_reason)
@@ -178,7 +178,7 @@ select is(
   'Ben sees only his own purchases');
 
 -- Act as Mia (manager) -------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 -- Only count the test sites: the local database may have real test data too.
 select is(
@@ -228,7 +228,7 @@ select throws_ok(
   'A manager cannot set reimbursed_at directly');
 
 -- Act as Olly (owner) --------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ select mark_reimbursed((select id from purchases where supplier = 'Mia shop')) $$,

@@ -1,0 +1,54 @@
+# CodeQL: GitHub's code scanner reads the TypeScript and JavaScript for
+# security bugs (injection, unsafe redirects, leaking data...). Findings show
+# in the repo's Security tab and on the pull request.
+#
+# Free for public repositories. A private repository needs GitHub Code
+# Security switched on (Settings > Advanced Security); see README > Branch
+# protection and security settings.
+#
+# Actions are pinned to commit SHAs (see ci.yml for why).
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Weekly as well: new CodeQL queries can find old bugs.
+  schedule:
+    - cron: "30 17 * * 0" # Sunday 17:30 UTC = Monday morning in Auckland
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Needed to upload the results to the Security tab.
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Set up CodeQL
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          languages: javascript-typescript
+          # JavaScript needs no build: CodeQL reads the source.
+          build-mode: none
+          # The default queries plus more security ones.
+          queries: security-extended
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          category: "/language:javascript-typescript"

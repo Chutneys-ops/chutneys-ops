@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { ingestPayslip, type IngestResult } from "@/lib/payslips-ingest";
 import { PAYSLIP_MAX_BYTES } from "@/lib/payslips";
+import { limitPerson } from "@/lib/supabase/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/supabase/session";
 
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
   const { userId, me } = await getSession(supabase);
   if (!userId) return reply({ status: "error", message: "You are signed out. Sign in again." }, 401);
   if (me?.role !== "owner") return reply({ status: "error", message: "Only the owner can upload payslips." }, 403);
+
+  const limit = await limitPerson(supabase, userId, "payslipUpload");
+  if (!limit.allowed) return reply({ status: "error", message: limit.message }, 429);
 
   let form: FormData;
   try {

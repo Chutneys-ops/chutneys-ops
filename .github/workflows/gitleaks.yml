@@ -1,0 +1,49 @@
+# Secret scanning with gitleaks on every push (any branch) and pull request.
+# It reads the whole git history for things that look like keys, tokens and
+# passwords (Supabase keys, Slack webhooks, private keys...). If it finds
+# one, the run fails: rotate that secret (docs/RUNBOOK.md > Rotate every
+# secret), then remove it from the code.
+#
+# Why not the gitleaks GitHub Action: it needs a paid licence for
+# organisation-owned repos. The gitleaks program itself is free (MIT), so we
+# download a fixed version and check its SHA-256 against the one published
+# with that release before running it.
+name: Secret scan
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the code (whole history)
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks (checksum checked)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          # From gitleaks_8.30.1_checksums.txt on the release page.
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$file" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${file}"
+          echo "${GITLEAKS_SHA256}  ${file}" | sha256sum --check -
+          tar -xzf "$file" gitleaks
+          ./gitleaks version
+
+      # --redact: never print a found secret into the (public) log.
+      - name: Scan the git history
+        run: ./gitleaks git . --redact --no-banner --exit-code 1

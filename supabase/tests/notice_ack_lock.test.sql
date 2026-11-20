@@ -20,20 +20,20 @@ insert into staff (id, name, role) values
 
 -- Mia posts three notices for everyone.
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 insert into notices (title, body, needs_ack) values
   ('Confirmed', 'Wear gloves', true),
   ('Read only', 'Not confirmed yet', true),
   ('Plain', 'No acknowledgement needed', false);
 
 -- Ana acknowledges "Confirmed", and only reads "Read only" and "Plain".
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 insert into notice_reads (notice_id) select id from notices where title in ('Confirmed', 'Read only', 'Plain');
 update notice_reads set acknowledged_at = now()
 where notice_id = (select id from notices where title = 'Confirmed');
 
 -- Back to Mia ----------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ update notices set title = 'Wear gloves always' where title = 'Confirmed' $$,
@@ -87,7 +87,7 @@ update notice_reads set acknowledged_at = now()
 where notice_id = (select id from notices where title = 'Owner test');
 
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 select throws_ok(
   $$ update notices set body = 'Owner edit' where title = 'Owner test' $$,
   '23514', null, 'The owner can''t edit an acknowledged notice either');

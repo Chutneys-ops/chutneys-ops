@@ -30,7 +30,7 @@ select col_default_is('checklist_runs', 'run_date', 'today_nz()',
 
 -- Act as Ana -----------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into checklist_runs (site_id, checklist) values ('10000000-0000-0000-0000-00000000000a', 'opening') $$,
@@ -115,7 +115,7 @@ select is(
   'unticking after submit removes nothing');
 
 -- Act as Ben -----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select is_empty(
   $$ select 1 from checklist_runs where site_id = '10000000-0000-0000-0000-00000000000a' $$,

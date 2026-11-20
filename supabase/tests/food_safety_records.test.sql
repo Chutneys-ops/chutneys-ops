@@ -54,7 +54,7 @@ select col_default_is('record_sheets', 'sheet_date', 'today_nz()',
 
 -- Act as Ana -----------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into record_sheets (site_id, template_code) values ('10000000-0000-0000-0000-00000000000a', 'test_fridge') $$,
@@ -204,7 +204,7 @@ select throws_ok(
   'staff cannot sign off');
 
 -- Act as Mia (manager at site A) -------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ select set_my_pin('12ab') $$,
@@ -233,7 +233,7 @@ select isnt(
   'the sheet is stamped as signed off');
 
 -- Back to Ana: the signed sheet is locked except for corrections -------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into record_entries (sheet_id, "values")
@@ -256,7 +256,7 @@ select lives_ok(
   'a correction with a note works after sign-off');
 
 -- Act as Ben (site B only) ---------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select is_empty(
   $$ select 1 from record_entries $$,

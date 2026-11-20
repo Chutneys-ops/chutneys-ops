@@ -30,7 +30,7 @@ insert into push_subscriptions (staff_id, endpoint, keys) values
 
 -- Act as Ana (staff) -----------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ select save_push_subscription('https://push.example/tablet', 'p1', 'a1', 'Chrome') $$,
@@ -84,7 +84,7 @@ select throws_ok(
   '42501', null, 'The API can''t change the reminders URL or secret');
 
 -- Act as Ben: he signs in on the same tablet and turns notifications on -------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select is((select count(*)::int from push_subscriptions where endpoint = 'https://push.example/ben'), 1,
   'Ana could not delete Ben''s subscription');
@@ -94,13 +94,13 @@ select lives_ok(
   'Ben can turn notifications on for the shared tablet');
 
 -- Act as Mia (manager) ---------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select lives_ok(
   $$ select set_site_opening_time('10000000-0000-0000-0000-00000000000a', '07:30') $$,
   'A manager can change a site''s opening time');
 
 -- Act as Tom (turned off) --------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 select throws_ok(
   $$ select save_push_subscription('https://push.example/tom', 'p', 'a', null) $$,
   '42501', null, 'A turned-off account can''t turn notifications on');

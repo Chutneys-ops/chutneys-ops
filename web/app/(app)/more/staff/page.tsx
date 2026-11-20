@@ -7,7 +7,7 @@ import { ROLE_LABELS, sortByStatusThenName, STATUS_LABELS, staffStatus, type Rol
 import { loadPayrollCodes } from "@/lib/supabase/payroll-codes";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/supabase/session";
-import { InviteForm, PayrollCodeForm, StaffActions } from "./staff-forms";
+import { InviteForm, PayrollCodeForm, ResetTwoStepForm, StaffActions } from "./staff-forms";
 
 type StaffRow = {
   id: string;
@@ -20,6 +20,13 @@ type StaffRow = {
   payroll_code: string | null;
 };
 type Login = { staff_id: string; joined: boolean; last_sign_in_at: string | null };
+type MfaCount = { staff_id: string; factors: number };
+
+/** "Two-step: 2 devices", "Two-step: not set up". */
+function twoStepLabel(factors: number): string {
+  if (factors === 0) return "Two-step: not set up";
+  return `Two-step: ${factors} ${factors === 1 ? "device" : "devices"}`;
+}
 
 const statusClass: Record<StaffStatus, string> = {
   active: "bg-primary-light text-primary-dark",
@@ -40,11 +47,13 @@ export default async function StaffPage() {
 
   // Payroll codes are private (only the owner and the person can read
   // them), so they come from staff_payroll_codes(), not the staff table.
-  const [staffResult, loginsResult, codeResult] = await Promise.all([
+  const [staffResult, loginsResult, codeResult, mfaResult] = await Promise.all([
     supabase.from("staff").select("id, name, email, role, active, invited_at, deactivated_at").order("name"),
     supabase.rpc("staff_logins"),
     loadPayrollCodes(supabase),
+    supabase.rpc("staff_mfa_factors"),
   ]);
+  const mfaFactors = new Map(((mfaResult.data ?? []) as MfaCount[]).map((m) => [m.staff_id, m.factors]));
   const joined = new Map(((loginsResult.data ?? []) as Login[]).map((l) => [l.staff_id, l.joined]));
   const people = sortByStatusThenName(
     ((staffResult.data ?? []) as Omit<StaffRow, "payroll_code">[]).map((row) => ({
@@ -53,7 +62,7 @@ export default async function StaffPage() {
       status: staffStatus(row.active, joined.get(row.id) ?? false),
     })),
   );
-  const error = staffResult.error ?? loginsResult.error ?? codeResult.error;
+  const error = staffResult.error ?? loginsResult.error ?? codeResult.error ?? mfaResult.error;
 
   return (
     <main className="mx-auto w-full max-w-md px-4 pt-2 pb-6">
@@ -98,6 +107,17 @@ export default async function StaffPage() {
                   {person.payroll_code && (
                     <span className="rounded-full border border-line px-2.5 py-1 text-muted">Payroll {person.payroll_code}</span>
                   )}
+                  {person.status !== "deactivated" && (
+                    <span
+                      className={`rounded-full px-2.5 py-1 ${
+                        (mfaFactors.get(person.id) ?? 0) === 0 && person.role !== "staff"
+                          ? "bg-warning-light text-warning"
+                          : "border border-line text-muted"
+                      }`}
+                    >
+                      {twoStepLabel(mfaFactors.get(person.id) ?? 0)}
+                    </span>
+                  )}
                 </div>
                 {person.status === "invited" && person.invited_at && (
                   <p className="mt-2 text-sm text-muted">Invite sent {aucklandShortDay(person.invited_at)}</p>
@@ -126,6 +146,9 @@ export default async function StaffPage() {
                         <PayrollCodeForm person={{ id: person.id, payrollCode: person.payroll_code }} />
                       )}
                       <StaffActions person={{ id: person.id, name: person.name, role: person.role, status: person.status }} />
+                      {person.status === "active" && (mfaFactors.get(person.id) ?? 0) > 0 && (
+                        <ResetTwoStepForm person={{ id: person.id, name: person.name }} />
+                      )}
                     </div>
                   </details>
                 )}

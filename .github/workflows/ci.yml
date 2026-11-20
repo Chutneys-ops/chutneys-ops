@@ -1,4 +1,8 @@
 # CI for Chutneys Ops: checks, unit tests, RLS tests and a production build.
+#
+# Every action is pinned to a full commit SHA, not a tag: a tag can be moved
+# to different code by whoever controls that repo, a SHA can't. The comment
+# says which version it is; Dependabot (.github/dependabot.yml) updates both.
 name: CI
 
 on:
@@ -22,10 +26,10 @@ jobs:
 
     steps:
       - name: Check out the code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Set up Node (same major version as local)
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -40,6 +44,15 @@ jobs:
       - name: Install web dependencies
         working-directory: web
         run: npm ci
+
+      # Known vulnerabilities in what we install. Fails on high or critical;
+      # fix with `npm audit fix` (or wait for the Dependabot PR).
+      - name: Dependency audit (root)
+        run: npm audit --audit-level=high
+
+      - name: Dependency audit (web)
+        working-directory: web
+        run: npm audit --audit-level=high
 
       # ---- Fast checks first: fail early before pulling Docker images ----
 
@@ -71,8 +84,16 @@ jobs:
       - name: Create storage buckets
         run: npx supabase seed buckets
 
+      # Includes security_guards.test.sql: RLS on every table, nothing for
+      # anon, fixed search_path on security definer functions, no public
+      # buckets.
       - name: RLS tests (pgTAP)
         run: npx supabase test db
+
+      # Supabase's database linter (plpgsql_check): broken function bodies,
+      # unused variables, wrong types. Fails on warnings too.
+      - name: Database lint
+        run: npx supabase db lint --level warning --fail-on warning
 
       # Copy the local URL and publishable key into the env of later steps.
       - name: Export Supabase env for the build

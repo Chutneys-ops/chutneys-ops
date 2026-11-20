@@ -39,7 +39,7 @@ select is(
 
 -- Owner uploads ------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into storage.objects (bucket_id, name, owner_id) values ('payslips',
@@ -92,7 +92,7 @@ select throws_ok(
   '42501', null, 'Only the server (secret key) can add email payslips');
 
 -- Drafts are invisible --------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select is((select count(*)::int from payslips), 0, 'Staff don''t see unpublished payslips, even their own');
 select is((select count(*)::int from storage.objects where bucket_id = 'payslips'), 0,
@@ -110,7 +110,7 @@ select throws_ok(
 select throws_ok($$ select * from publish_payslips(array(select id from payslips)) $$,
   '42501', null, 'Staff can''t publish');
 
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from payslips), 0, 'Managers don''t see unpublished payslips either');
 select throws_ok(
   $$ insert into storage.objects (bucket_id, name, owner_id) values ('payslips',
@@ -125,18 +125,18 @@ create temp table ids as select staff_id, id from payslips
 grant select on ids to authenticated;
 set local role authenticated;
 
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select throws_ok($$ select * from publish_payslips(array(select id from ids)) $$,
   '42501', null, 'Managers can''t publish');
 
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from publish_payslips(array(select id from ids))), 3,
   'The owner publishes all three');
 select is((select count(*)::int from publish_payslips(array(select id from ids))), 0,
   'Publishing again changes nothing');
 
 -- Each person sees only their own -----------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 select is((select array_agg(staff_id) from payslips), array['a0000000-0000-0000-0000-00000000000a'::uuid],
   'Ana sees only her own published payslip');
 select is(
@@ -161,7 +161,7 @@ select throws_ok($$ delete from payslips $$, '42501', null, 'Staff can''t delete
 select throws_ok($$ select withdraw_payslip((select id from ids where staff_id = 'a0000000-0000-0000-0000-00000000000a'), 'mine') $$,
   '42501', null, 'Staff can''t withdraw');
 
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select is((select array_agg(staff_id) from payslips), array['c0000000-0000-0000-0000-00000000000c'::uuid],
   'A manager sees only her own payslip, not her staff''s');
 select is((select count(*)::int from storage.objects where bucket_id = 'payslips' and name not like 'c0000000%'), 0,
@@ -170,7 +170,7 @@ select throws_ok($$ select withdraw_payslip((select id from ids where staff_id =
   '42501', null, 'Managers can''t withdraw');
 
 -- Withdraw --------------------------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from payslips where staff_id in ('a0000000-0000-0000-0000-00000000000a', 'b0000000-0000-0000-0000-00000000000b', 'c0000000-0000-0000-0000-00000000000c')), 3, 'The owner sees every payslip');
 select is((select count(*)::int from storage.objects where bucket_id = 'payslips'
              and split_part(name, '/', 1) in ('a0000000-0000-0000-0000-00000000000a', 'b0000000-0000-0000-0000-00000000000b',
@@ -192,7 +192,7 @@ select lives_ok(
 select is((select count(*)::int from publish_payslips(array(select id from ids))), 0,
   'A withdrawn payslip can''t be published again');
 
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from payslips), 0, 'Ben no longer sees the withdrawn payslip (the correction is a draft)');
 select is((select count(*)::int from storage.objects where bucket_id = 'payslips'), 0, 'Ben can''t open the withdrawn file');
 
@@ -216,11 +216,11 @@ select ok(
 
 -- Payroll codes ----------------------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select throws_ok($$ select set_staff_payroll_code('a0000000-0000-0000-0000-00000000000a', 'E1') $$,
   '42501', null, 'Only the owner sets payroll codes');
 
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select lives_ok($$ select set_staff_payroll_code('a0000000-0000-0000-0000-00000000000a', ' e012 ') $$,
   'The owner sets Ana''s payroll code');
 select throws_ok($$ select set_staff_payroll_code('b0000000-0000-0000-0000-00000000000b', 'E012') $$,

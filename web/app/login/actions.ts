@@ -27,13 +27,19 @@ export async function login(
     return { error: "Email or password is incorrect." };
   }
 
+  // Owners and managers (and anyone who turned it on) type a code next.
+  // Home would send them there anyway; this saves a hop.
+  const { data: step } = await supabase.rpc("mfa_status");
+
   // redirect() throws, so it must be outside any try/catch.
   // Always Home after signing in: never a "next" or last-visited page.
-  redirect("/home");
+  redirect(step === "enrol" || step === "verify" ? "/mfa" : "/home");
 }
 
-export async function logout() {
+/** Signs out on the server. The browser then loads /login itself (a full
+ *  page load, see sign-out-button.tsx), so nothing from the last person's
+ *  pages stays in memory on a shared tablet. */
+export async function logout(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/login");
 }

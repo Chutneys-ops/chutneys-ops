@@ -10,6 +10,7 @@
 import { refresh } from "next/cache";
 import { isInvoicePathFor, validatePurchase } from "@/lib/purchases";
 import { createClient } from "@/lib/supabase/server";
+import { limitPerson } from "@/lib/supabase/rate-limit";
 import { getCurrentShift } from "@/lib/supabase/session";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -49,6 +50,11 @@ export async function addPurchase(formData: FormData): Promise<PurchaseResult> {
   if (!userId) return { ok: false, message: "You are signed out. Sign in again." };
 
   const invoicePath = text(formData, "invoice_path").trim() || null;
+  const limit = await limitPerson(supabase, userId, "purchase");
+  if (!limit.allowed) {
+    await removeUpload(supabase, invoicePath);
+    return { ok: false, message: limit.message };
+  }
   const shift = await getCurrentShift(supabase, userId);
   if (!shift) {
     await removeUpload(supabase, invoicePath);

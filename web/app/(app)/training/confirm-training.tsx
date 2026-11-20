@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { newFileId } from "@/lib/uploads";
 import { confirmTraining, type ConfirmResult } from "./actions";
 
+// Keep in step with the canvas's h-[160px] class below.
 const PAD_HEIGHT = 160;
 
 function SignaturePad({ onSign, busy }: { onSign: (png: Blob) => void; busy: boolean }) {
@@ -88,9 +89,10 @@ function SignaturePad({ onSign, busy }: { onSign: (png: Blob) => void; busy: boo
         ref={canvasRef}
         aria-label="Signature pad"
         aria-describedby="pad-help"
-        style={{ height: PAD_HEIGHT }}
-        // touch-none: drawing mustn't scroll the page.
-        className="mt-1.5 block w-full touch-none rounded-xl border border-line bg-white"
+        // h-[160px] = PAD_HEIGHT (a class, not style={}, so the Content
+        // Security Policy needs no inline styles). touch-none: drawing
+        // mustn't scroll the page.
+        className="mt-1.5 block h-[160px] w-full touch-none rounded-xl border border-line bg-white"
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}

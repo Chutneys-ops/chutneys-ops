@@ -30,7 +30,7 @@ insert into shifts (site_id, staff_id, clock_in, clock_out) values
 
 -- Act as Mia (manager) -------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into notices (title, body) values ('Everyone', 'For all staff') $$,
@@ -95,7 +95,7 @@ select is(
   6, 'Managers see every notice, archived and expired too');
 
 -- Act as Ana (staff) ---------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select array_agg(title order by title) from notices where posted_by = 'c0000000-0000-0000-0000-00000000000c'),
@@ -112,7 +112,7 @@ select is(
   (select count(*)::int from notices where title = 'Hacked'),
   0, 'Staff can''t edit notices');
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 -- Reads
 select lives_ok(
@@ -131,7 +131,7 @@ reset role;
 create temp table cafe_notice as select id from notices where title = 'Cafe only';
 grant select on cafe_notice to authenticated;
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into notice_reads (notice_id) select id from cafe_notice $$,
@@ -153,7 +153,7 @@ select throws_ok(
   '42501', null, 'Staff can''t delete reads');
 
 -- Act as Ben -----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select array_agg(title order by title) from notices where posted_by = 'c0000000-0000-0000-0000-00000000000c'),

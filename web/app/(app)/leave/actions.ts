@@ -12,6 +12,7 @@ import { aucklandDate } from "@/lib/dates";
 import { parseHours, validateLeave } from "@/lib/leave";
 import { createClient } from "@/lib/supabase/server";
 import { notifyLeaveDecided } from "@/lib/notify";
+import { limitPerson } from "@/lib/supabase/rate-limit";
 import { isOwnFilePath } from "@/lib/uploads";
 
 export type LeaveResult = { ok: boolean; message?: string; errors?: Record<string, string> };
@@ -44,6 +45,12 @@ export async function requestLeave(formData: FormData): Promise<LeaveResult> {
   const removeUpload = async () => {
     if (certificatePath) await supabase.storage.from("leave-documents").remove([certificatePath]);
   };
+
+  const limit = await limitPerson(supabase, userId, "leave");
+  if (!limit.allowed) {
+    await removeUpload();
+    return { ok: false, message: limit.message };
+  }
 
   const { values, errors } = validateLeave(
     {

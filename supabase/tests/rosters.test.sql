@@ -36,7 +36,7 @@ grant all on ids to authenticated;
 
 -- Act as Mia (manager) ---------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 insert into ids values
   ('a_week', ensure_roster_week('10000000-0000-0000-0000-00000000000a', '2030-01-07')),
@@ -148,7 +148,7 @@ select is(
   3060, 'Over 40 hours warns, counting every site (7.5 + 5.5 + 4 + 4 at Cafe B + 4 x 7.5 = 51 hours)');
 
 -- Staff can't see an unpublished week ------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select is((select count(*)::int from roster_shifts), 0, 'Ana sees no shifts while nothing is published');
 select is((select count(*)::int from roster_weeks), 0, 'Ana sees no unpublished weeks');
@@ -172,7 +172,7 @@ select throws_ok(
   '42501', null, 'Staff can''t see roster warnings');
 
 -- Publish (Mia) ---------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   publish_roster_week((select id from ids where name = 'a_week')),
@@ -184,7 +184,7 @@ select is(
   'Publishing stamps the time and the person');
 
 -- Staff see their own published shifts only -----------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select array_agg(work_date::text order by work_date) from roster_shifts),
@@ -207,7 +207,7 @@ select is_empty(
   'Ben can''t delete shifts');
 
 -- Editing a published week marks it changed ----------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 update roster_shifts set finish_time = '16:00'
 where staff_id = 'b0000000-0000-0000-0000-00000000000b' and work_date = '2030-01-07';

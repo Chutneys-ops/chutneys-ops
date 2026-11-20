@@ -30,7 +30,7 @@ select is(
 
 -- Staff ------------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select is((select count(*)::int from storage.objects where bucket_id = 'verifier-packs'), 0,
   'Staff can''t see the monthly copies');
@@ -40,7 +40,7 @@ select throws_ok(
   '42501', null, 'Staff can''t upload a pack');
 
 -- Manager ----------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select is((select count(*)::int from storage.objects where bucket_id = 'verifier-packs'), 0,
   'Managers make packs on demand but can''t see the stored monthly copies');
@@ -50,7 +50,7 @@ select throws_ok(
   '42501', null, 'Managers can''t upload a pack');
 
 -- Owner ------------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select is((select count(*)::int from storage.objects where bucket_id = 'verifier-packs'), 1,
   'The owner sees the monthly copies');
@@ -79,7 +79,7 @@ insert into storage.buckets (id, name) values ('signatures', 'signatures') on co
 insert into storage.objects (bucket_id, name, owner_id)
   values ('signatures', 'a0000000-0000-0000-0000-00000000000a/sig.png', 'a0000000-0000-0000-0000-00000000000a');
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from storage.objects where bucket_id = 'verifier-packs'), 0,
   'Managers still see no packs after other buckets get files');
 

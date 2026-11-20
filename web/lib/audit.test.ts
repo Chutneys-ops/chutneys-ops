@@ -388,3 +388,18 @@ test("what happened: notifications and opening times", () => {
     "Sent Ana the fridge temperatures reminder",
   );
 });
+
+test("what happened: two-step resets and rate limits", () => {
+  assert.equal(areaLabel("mfa_resets"), "Two-step resets");
+  assert.equal(columnLabel("mfa_resets", "staff_id"), "For");
+  assert.equal(columnLabel("mfa_resets", "factors_removed"), "Devices removed");
+  assert.equal(
+    describeAudit(entry({ table_name: "mfa_resets", actor_id: MIA, new_data: { staff_id: ANA, factors_removed: 1 } }), lookups),
+    "Reset Ana's two-step sign-in",
+  );
+  assert.equal(areaLabel("rate_limits"), "Rate limits");
+  assert.equal(
+    describeAudit(entry({ table_name: "rate_limits", action: "update", new_data: { hits: 2 }, changed_fields: ["hits"] })),
+    "Counted a try against a rate limit",
+  );
+});

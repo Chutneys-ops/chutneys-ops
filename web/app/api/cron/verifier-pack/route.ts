@@ -16,6 +16,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cronAuthorised } from "@/lib/cron-auth";
 import { aucklandDate } from "@/lib/dates";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { limitIp } from "@/lib/supabase/rate-limit";
 import { loadPackInput } from "@/lib/supabase/verifier-pack";
 import {
   buildPack,
@@ -46,6 +47,11 @@ async function chosenMonth(request: NextRequest): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  // Per IP, before the secret check, so guessing the secret is slow too.
+  const limit = await limitIp(request, "cron");
+  if (!limit.allowed) {
+    return NextResponse.json({ error: limit.message }, { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } });
+  }
   if (!cronAuthorised(request)) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }

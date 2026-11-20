@@ -61,7 +61,7 @@ select is(
 
 -- Insert as Ana ---------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 insert into purchases (site_id, supplier, description, total_incl_gst, payment_method, no_receipt_reason)
 values ('10000000-0000-0000-0000-00000000000a', 'Audit shop', 'Onions', 23.00, 'own_money', 'Market');
@@ -77,7 +77,7 @@ select throws_ok(
   'Staff cannot write to the audit log');
 
 -- Update as Mia (through a security definer function) -------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select count(*)::int from audit_log),
@@ -92,7 +92,7 @@ select lives_ok(
 select lives_ok($$ select set_my_pin('2468') $$, 'Mia sets her PIN');
 
 -- Check as the owner -----------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 create temp table p as select id::text as id from purchases where supplier = 'Audit shop';
 grant select on p to authenticated;

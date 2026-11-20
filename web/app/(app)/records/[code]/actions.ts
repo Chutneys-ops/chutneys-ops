@@ -9,6 +9,7 @@
 
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { limitPerson } from "@/lib/supabase/rate-limit";
 import { getCurrentShift } from "@/lib/supabase/session";
 import { aucklandDate } from "@/lib/dates";
 import { findOutOfRange, parseEntryForm, type EntryValues, type RecordField } from "@/lib/records";
@@ -195,6 +196,11 @@ export async function signOff(sheetId: string, prev: FormState, formData: FormDa
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getClaims();
   if (!auth?.claims?.sub) return fail("You are signed out. Sign in again.");
+
+  // On top of the database's 5-wrong-PINs lock: a cap on attempts across
+  // every sheet, so a script can't walk through sheets guessing.
+  const limit = await limitPerson(supabase, auth.claims.sub, "pinSignOff");
+  if (!limit.allowed) return fail(limit.message);
 
   // sign_off_sheet checks you're a manager or owner and the PIN, then stamps
   // signed_off_by and signed_off_at itself.

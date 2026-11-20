@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { NextConfig } from "next";
+import { STATIC_SECURITY_HEADERS } from "./lib/security-headers";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -7,6 +8,14 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
   cacheComponents: true,
+  // Error monitoring in the browser (instrumentation-client.ts) needs the
+  // Sentry DSN at build time. One setting, SENTRY_DSN, for server and
+  // browser; a DSN is designed to be public (it can only send events).
+  // Empty means Sentry stays off.
+  env: {
+    NEXT_PUBLIC_SENTRY_DSN: process.env.SENTRY_DSN ?? "",
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT ?? "",
+  },
   // The verifier pack PDF reads its font files at run time, which the build
   // can't see from the code, so tell it to ship them with these two routes.
   outputFileTracingIncludes: {
@@ -39,6 +48,10 @@ const nextConfig: NextConfig = {
   // from this site.
   async headers() {
     return [
+      // HSTS, nosniff, Referrer-Policy, framing, Permissions-Policy on every
+      // response. The Content Security Policy is per request (a new nonce
+      // each time), so it's set in proxy.ts instead.
+      { source: "/:path*", headers: STATIC_SECURITY_HEADERS },
       {
         source: "/sw.js",
         headers: [

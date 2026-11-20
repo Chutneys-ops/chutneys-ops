@@ -28,7 +28,7 @@ insert into storage.objects (bucket_id, name, owner_id) values
 
 -- Act as Ana -----------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into leave_requests (reason, start_date, end_date, hours, gi_symptoms, note)
@@ -127,7 +127,7 @@ select throws_ok(
   'An uncleared vomiting/diarrhoea report blocks clocking in');
 
 -- Act as Ben -----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"b0000000-0000-0000-0000-00000000000b","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into leave_requests (reason, start_date, end_date, hours, gi_symptoms, note)
@@ -145,7 +145,7 @@ select throws_ok(
   '42501', null, 'Staff cannot clear someone to work');
 
 -- Act as Mia (manager) -------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 
 -- Only count the test people: the local database may have real test data too.
 select is(
@@ -193,14 +193,14 @@ select lives_ok(
   'A manager can clear Ana to return to work');
 
 -- Act as Olly (owner) --------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ select decide_leave((select id from leave_requests where note = 'Mia sick'), 'approved', null, null) $$,
   'The owner can decide a manager''s leave');
 
 -- Back to Ana ----------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 
 select is(needs_clearance(), false, 'Ana no longer needs clearing');
 

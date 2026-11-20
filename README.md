@@ -14,7 +14,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Money (cash-ups, daily sales) is owner only; managers can't see it.
   - Old clock-in/clock-out rows (and `fix_clock_out`, `needs_review`) stay in the database for history. The app no longer shows Clock out, forgotten-shift notices or the "Needs fixing" list.
   - `staff_sites` is no longer used for access. It's kept for now as history.
-- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. Signing in always lands on Home (never a "next" or last-visited page). `/` redirects to `/home`, and refreshing a page stays on it. Wrong details always say "Email or password is incorrect", including for turned-off accounts, so the form never reveals who has an account.
+- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. Owners and managers then type a code from an authenticator app (see Security hardening). Signing in always lands on Home (never a "next" or last-visited page). `/` redirects to `/home`, and refreshing a page stays on it. Wrong details always say "Email or password is incorrect", including for turned-off accounts, so the form never reveals who has an account.
 - **Staff accounts** (thirteenth migration, owner only at More > Staff):
   - **No public sign-up** (`enable_signup = false`). The owner invites people (name, email, role). They get an email with a link and choose their own password.
   - **Invite**: a server action checks with the caller's *own* session that they are an active owner. Only then does it use the admin client (`web/lib/supabase/admin.ts`, `SUPABASE_SECRET_KEY`) to call `auth.admin.inviteUserByEmail`. It then adds the `staff` row with the owner's session (an owner-only insert policy).
@@ -99,7 +99,7 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Never deleted:** no delete grants, and a trigger refuses deletes. Only the managers' columns can be written; `posted_by` and `posted_at` are fixed.
   - The rules for the audience, unread counts, read counts, form checks and expiry are in `web/lib/notices.ts`, with tests.
   - **Phone notifications:** a new notice is pushed to its audience (see Phone notifications). Editing doesn't notify.
-- **More menu** (`/more`): Notices, Leave, Training, My payslips, Settings and Sign out. Managers also see Roster, Leave requests, Staff sickness, Training matrix and Verifier pack; the owner also sees Staff, Payslips, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
+- **More menu** (`/more`): Notices, Leave, Training, My payslips, Settings, Your privacy and Sign out. Managers also see Roster, Leave requests, Staff sickness, Training matrix and Verifier pack; the owner also sees Staff, Payslips, Export hours and leave, and Audit log. More stays highlighted on its sub-pages.
 - **Trading days** (twentieth migration): `sites.trading_days` lists the ISO weekdays each site trades (1 = Monday ... 7 = Sunday), default every day.
   - Managers and the owner set them in Settings > Opening times and trading days (Mon to Sun toggles next to each site's opening time) through `set_site_trading_days()`. It sorts the days and removes repeats. Sites have no update policy, so it's the only way in.
   - A check (`valid_trading_days`) holds even in the SQL editor: at least one day (a site that never trades is turned off instead), only 1 to 7, and no repeats.
@@ -186,6 +186,31 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - **Storage:** a private `payslips` bucket (PDF only, 2 MB) in `config.toml` and the migration. The owner uploads and reads everything. Anyone else can only read the file of their own published, not withdrawn payslip. Nobody can replace or delete a file through the API.
   - **The seam for email:** `ingestPayslip(db, source, file, staffHint, run)` in `web/lib/payslips-ingest.ts` is the only way a PDF comes in. A future inbound-email webhook can call it with the admin client and `source: "email"` (allowed with no uploader), after checking its own secret.
   - Matching, period labels, run grouping and file checks are in `web/lib/payslips.ts`, with tests. PDF text is read with `unpdf` (pinned, loaded with Node's own require through `serverExternalPackages`).
+- **Security hardening** (slice 8b, migrations 23 to 25). The threat model and which test proves each control: [SECURITY.md](SECURITY.md). What to do when something goes wrong: [docs/RUNBOOK.md](docs/RUNBOOK.md).
+  - **Two-step sign-in** (authenticator app codes, TOTP; `[auth.mfa.totp]` in `config.toml`):
+    - Owners and managers must set it up at their next sign-in (`/mfa`: a QR code or a typed key, then a 6-digit code). Staff can turn it on in Settings > Two-step sign-in, which also lists your devices, adds a second one (encouraged: phone plus a spare) and removes one.
+    - **The database enforces it:** `is_owner()` and `is_manager()` need a token that came with a code (`aal2`). A manager who signed in with only a password and has no authenticator yet gets staff-level access. Anyone who *has* an authenticator gets nothing until they type the code, except their own staff row (so the app can show the code screen); `is_active()` checks this.
+    - `mfa_status()` tells the app what to ask for (`enrol`, `verify` or `none`); `getSession()` sends people to `/mfa` until it's `none`.
+    - **Lost phone:** the owner uses More > Staff > Manage > **Reset two-step sign-in** (`reset_staff_mfa`): removes their authenticators, signs them out everywhere, and records it in `mfa_resets` (audited). Never on yourself; the owner's own recovery is in the runbook. The Staff page shows "Two-step: 2 devices" or "not set up" for everyone.
+    - More > Staff asks the database `is_owner()` before using the secret key, because the staff row says "owner" even for a password-only sign-in.
+  - **Rate limits:**
+    - Supabase Auth's limits tightened in `config.toml` (sign-in 20 per 5 minutes per IP, link checks 15, one reset email per address per minute); the hosted equivalents are in the runbook's checklist.
+    - The app's own limiter, with no paid service: a `rate_limits` table and `check_rate_limit(key, max, window_seconds)`. Signed-in people can only use keys starting `user:<their id>:`, so nobody can use up someone else's allowance. Per-IP keys (`ip:<hash>:...`) are for the server's secret key only, and the IP is hashed so no address is stored. Old rows are pruned nightly (pg_cron).
+    - Used for invites, PIN sign-off, two-step codes and setup, saving purchases and leave (with their uploads), payslip uploads, resetting two-step sign-in, and the cron routes (per IP, before the secret is checked). Limits are in `web/lib/rate-limit.ts`. People see "Too many attempts, try again in N minutes."
+  - **Security headers:**
+    - A Content Security Policy with a new random nonce on every response, set in `proxy.ts` (`web/lib/security-headers.ts`). Only scripts we served run; no `eval`; no inline styles except React's exact `display:none` (by hash). It allows only this site, the Supabase URL, and Sentry when it's on.
+    - Every response (`next.config.ts`) also gets Strict-Transport-Security (two years), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` with `frame-ancestors 'none'`, and a Permissions-Policy that turns off what we don't use (camera allowed for "Take photo").
+    - **Every page renders per request** (`export const instant = false` and `connection()` in the root layout). Next.js adds the nonce only when it renders the HTML for that request, so a page prebuilt at build time would have every script blocked. Cache Components stays on.
+    - The signature pad's inline height became a class, and the app has its own 404 page, because Next.js's built-in one uses inline styles.
+  - **Shared tablets:**
+    - Settings > This device > "This is a shared device", remembered in this browser only. It shows which mode is on.
+    - On a shared device, 15 minutes without a tap, key press or scroll signs the person out, including after the tablet has slept. Signing in restarts the clock.
+    - **Sign out** (always, shared or not) removes the push subscription, clears Cache Storage, sessionStorage and the app's localStorage keys (keeping the device settings), then loads `/login` as a full page. If the Back button shows a page from the browser's memory, it reloads (and goes to `/login`).
+    - The rules are in `web/lib/shared-device.ts`, with tests.
+  - **Database guards** (migration 25): `anon` (signed out) loses every table grant and can't run any of our functions, now and for anything created later (default privileges). `supabase/tests/security_guards.test.sql` fails CI if any table has RLS off, anon has any table grant or function, a security definer function has no fixed `search_path`, or a bucket is public. `npx supabase db lint` runs in CI too.
+  - **Error monitoring:** Sentry (`@sentry/nextjs`), only when `SENTRY_DSN` is set (otherwise it's never loaded). `web/lib/sentry-scrub.ts` removes names, emails, IPs, request bodies, cookies, headers and query strings before anything is sent. Errors only: no tracing or session replay. Setup: runbook > Error monitoring.
+  - **`/privacy`:** for staff, no sign-in needed: what the app records about them, why, who sees it, how long it's kept, and how to ask for or correct it (Privacy Act 2020). Linked from More and the sign-in page.
+  - **CI:** Dependabot (npm in the root and `web/`, and GitHub Actions, weekly), `npm audit --audit-level=high`, CodeQL (`.github/workflows/codeql.yml`), gitleaks secret scanning on every push and PR (`gitleaks.yml`), and every action pinned to a commit SHA.
 - **Bottom navigation**: Home, Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests in `web/lib/*.test.ts` for:
@@ -200,11 +225,12 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - trading days (weekdays across daylight saving, the form checks, the wording, and the default matching the migration)
   - reminders (no fridge or opening-check reminders on a non-trading day; Auckland clock in summer and winter, every reminder's window and audience, switches, keys, message wording)
   - payslips (file name matching by code and name with macrons and ambiguity, leavers matched for final pay, download file names, text inside the PDF, period labels across months and years, the default run, run checks matching the migration, file checks, paths, run grouping and the notification wording)
+  - security: rate limit keys, IP hashing and messages; two-step codes, setup keys and device advice; the CSP and headers (including the `display:none` hash); the shared-device idle rules and which keys sign out clears; the Sentry scrubber
   - the verifier pack (date ranges and months, rows with corrections and later readings, per-unit limits, gaps from the day a site was added, trading days and CLOSED days, closed and new sites, sickness rows with no medical details, training to date for everyone who worked, contents pages and page numbers)
 
-  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), notifications (own subscriptions and switches only, a shared browser moves to the new person, the reminders log is job-only and unique, opening times are manager only, the scheduler functions can't be called through the API, no push keys in the audit log), trading days (only managers and the owner change them, never directly; at least one day, 1 to 7, no repeats, even from the SQL editor), payslips (staff and managers never see anyone else's payslip or file; drafts are invisible even to their owner; only the owner uploads, publishes and withdraws; withdrawn ones are hidden but kept; no edits or deletes even as postgres; one live payslip per run; payroll codes owner only and unique; the owner can upload, publish and download a turned-off person's final payslip, but nobody else can add one and the leaver still sees nothing; payroll codes readable only by the owner and the person, never from the staff table), verifier packs (only the owner reads the monthly copies; nobody uploads, changes or deletes them through the API; the scheduler can't be called through the API and runs daily), and staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy).
+  pgTAP tests in `supabase/tests/` for checklist, records, shift access, temperature limits, purchases, sick leave, training (including the storage policies), timesheets and NZ breaks, the audit log (including a check that every table is audited), notices (only managers post, edit and archive; staff see only their sites' live notices; reads are your own; acknowledgements can't be undone; acknowledged wording can't be edited), rosters (staff see only their own shifts in published weeks and never another site's; only managers write and publish; no overlaps across sites; turned-off people refused; breaks and paid minutes can't be written; publishing stamps time and person; warnings; copy last week), notifications (own subscriptions and switches only, a shared browser moves to the new person, the reminders log is job-only and unique, opening times are manager only, the scheduler functions can't be called through the API, no push keys in the audit log), trading days (only managers and the owner change them, never directly; at least one day, 1 to 7, no repeats, even from the SQL editor), payslips (staff and managers never see anyone else's payslip or file; drafts are invisible even to their owner; only the owner uploads, publishes and withdraws; withdrawn ones are hidden but kept; no edits or deletes even as postgres; one live payslip per run; payroll codes owner only and unique; the owner can upload, publish and download a turned-off person's final payslip, but nobody else can add one and the leaver still sees nothing; payroll codes readable only by the owner and the person, never from the staff table), verifier packs (only the owner reads the monthly copies; nobody uploads, changes or deletes them through the API; the scheduler can't be called through the API and runs daily), staff accounts (turned-off people see and add nothing; only the owner changes roles or turns accounts off, never their own; a check that every table has the "active accounts only" policy), two-step sign-in (an aal1 manager can't approve, sign off or see all, and an aal2 one can; with an authenticator a password alone opens nothing; staff who opted in; only the owner resets, never their own, audited, signs them out), the rate limiter (the window, the reset, per-person keys only your own, per-IP keys server only) and the security guards (RLS everywhere, nothing for anon, fixed search_path, no public buckets).
 - **Test users in the seed**: three local logins (see Daily start), so testing never needs clicking in Studio.
-- **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), and a production build.
+- **CI** (`.github/workflows/ci.yml`): on every PR to `main` it runs TypeScript, ESLint, unit tests, `npm audit`, the RLS tests against a local Supabase (with Storage and the buckets from `config.toml`), the database linter, and a production build. `codeql.yml` and `gitleaks.yml` run alongside; Dependabot opens update PRs weekly.
 
 ## Daily start
 
@@ -221,7 +247,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
    ```
 
    The seed is safe to re-run: rows that already exist are skipped or updated. Don't use `npx supabase db reset`; it wipes everything you've tested with.
-5. Log in with one of the seeded test users. The password for all three is `password123`, and they are for local testing only. After logging in, choose a site: that decides which site's records you can add today. Enter hours on Time.
+5. Log in with one of the seeded test users. The password for all three is `password123`, and they are for local testing only. **Owner and manager need two-step sign-in:** the first time, `/mfa` shows a QR code; scan it with any authenticator app (Google Authenticator, Microsoft Authenticator, 1Password...) and type the code. After that, type a code at each sign-in. To start over, remove their authenticator: `docker exec supabase_db_chutneys-ops psql -U postgres -d postgres -c "delete from auth.mfa_factors where user_id in (select id from staff where email = 'manager@test.local');"` After logging in, choose a site: that decides which site's records you can add today. Enter hours on Time.
 
    | Login | Role | What they can do |
    |---|---|---|
@@ -258,6 +284,15 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 9. End of day: `npx supabase stop`.
 
 ## Known follow-ups
+
+- **Security (slice 8b):**
+  - **Hosted settings before go-live:** work through docs/RUNBOOK.md > Hosted settings checklist (two-step sign-in, rate limits, buckets, env vars, two-step sign-in on your own dashboard accounts).
+  - **GitHub settings:** branch protection and security features can't be set from code. See Branch protection and security settings below.
+  - **Recovery codes:** Supabase Auth supports one-time recovery codes for two-step sign-in. Adding them would let a manager recover without the owner.
+  - **Restore drill:** do the first backup restore (runbook) once the hosted project has real data, then every three months.
+  - **CSP report collection:** violations only show in the browser console. A `report-to` endpoint (or Sentry's CSP reports) would tell us if a real page is blocked.
+  - **Sentry source maps:** not uploaded, so browser stack traces are minified. Add `withSentryConfig` and an auth token if the traces are hard to read.
+  - **Uploads before a refused save:** if the rate limit refuses a purchase or leave request, its upload is removed straight away. A file uploaded straight to Storage without ever calling the action is only bounded by the bucket's size limit (see Orphaned uploads).
 
 - **Staff accounts:**
   - **Hosted Supabase settings before go-live:** `config.toml` only configures the local stack. In the hosted dashboard:
@@ -425,6 +460,27 @@ Owner answers (fill in after the meeting):
 
 -
 
+## Branch protection and security settings
+
+GitHub settings can't be set from code, so set these by hand once (and check them after changing the repo's owner or visibility).
+
+**Protect `main`** (repository Settings > Rules > Rulesets > New branch ruleset, or Settings > Branches > Add rule):
+
+1. Name it `main`, enforcement **Active**, target branch `main` (Include default branch).
+2. **Require a pull request before merging.** Working alone, set required approvals to 0; the point is that every change goes through a PR and its checks. With a second developer, require 1 approval and "Dismiss stale approvals when new commits are pushed".
+3. **Require status checks to pass**, with "Require branches to be up to date before merging". Add the checks (they appear after they've run once): `ci` (CI), `analyze` (CodeQL), `gitleaks` (Secret scan).
+4. **Block force pushes** and **Restrict deletions**.
+5. **Bypass list: empty**, so the rules apply to admins too.
+
+**Security features** (Settings > Advanced Security, or Code security and analysis):
+
+- **Dependabot alerts** and **Dependabot security updates**: on. (`.github/dependabot.yml` does the weekly version updates.)
+- **Secret scanning** and **Push protection**: on. GitHub's own scanner blocks a push that contains a known key format, before gitleaks even runs.
+- **Code scanning:** CodeQL results from `codeql.yml` appear here. Free for public repositories; a private repository needs GitHub Code Security.
+- **Private vulnerability reporting:** on (SECURITY.md tells people to use it).
+
+**Actions** (Settings > Actions > General): allow only actions from GitHub and verified creators plus the ones we use, and set the default `GITHUB_TOKEN` permission to **read**.
+
 ## Rules for this repo
 
 - **Every new business table must call `enable_audit()` in its migration**, for example `select enable_audit('stock_counts');`. The pgTAP test `supabase/tests/audit.test.sql` fails if a table in `public` has no audit trigger. Only tables holding secrets (like `staff_pins`) are left out, by adding them to that test's allowlist with a comment saying why.
@@ -433,18 +489,27 @@ Owner answers (fill in after the meeting):
 - **Every new table must also call `enable_active_only()`**, for example `select enable_active_only('stock_counts');`, so turned-off accounts can't read or write it. `supabase/tests/staff_accounts.test.sql` fails if a table in `public` is missing it.
 - **The secret key (`SUPABASE_SECRET_KEY`) is only used in `web/lib/supabase/admin.ts`**, which imports `server-only`. Check the caller is an active owner with their own session *before* using it. Two other callers, each checked a different way:
   - `web/lib/notify.ts`, only after the action's own database call succeeded under the person's session (that success proves they were allowed to post, publish or decide);
-  - `/api/cron/reminders`, only after it checked `CRON_SECRET`.
+  - `/api/cron/reminders` and `/api/cron/verifier-pack`, only after they checked `CRON_SECRET`;
+  - `limitIp()` in `web/lib/supabase/rate-limit.ts`, which only counts a per-IP rate limit (before the cron secret is checked).
 
+- **Security definer functions** need `set search_path = public` (or another fixed path), and `revoke execute ... from public, anon` with an explicit grant to `authenticated` only if signed-in people should call them. `supabase/tests/security_guards.test.sql` fails otherwise.
+- **Owner and manager checks** use `is_owner()` / `is_manager()` in the database (they include two-step sign-in). In the app, `me.role` is for showing the right screens; anything that then uses the secret key must ask the database `is_owner()` first, as More > Staff does.
+- **Expensive or sensitive actions** (sending email, uploads, anything with a PIN or code) call `limitPerson(supabase, userId, "<limit>")` first, with the limit added to `LIMITS` in `web/lib/rate-limit.ts`.
+- **No inline styles or scripts** in pages: the Content Security Policy blocks them. Use Tailwind classes, and `next/script` with the nonce from `headers().get("x-nonce")` if a script is ever needed. New outside services (fonts, analytics, a payments iframe) must be added to `web/lib/security-headers.ts` on purpose.
 - Real Chutneys data never goes in this repo. Use the sample seed data only.
 - Secrets (Supabase keys, Slack webhooks) go in `.env`, which is git-ignored.
 
 ## Files
 
 - `CLAUDE.md` - project context for Claude Code
+- `SECURITY.md` - what we protect, from whom, how, and how to report a vulnerability
+- `docs/RUNBOOK.md` - hosted settings, restoring a backup, rotating secrets, owner recovery, breach response
 - `supabase/migrations/` - database tables, RLS policies and functions, applied in date order
 - `supabase/seed.sql` - sample data matching the concept demo, record templates and local test users
 - `supabase/tests/` - pgTAP tests for the RLS rules and food safety records
 - `web/` - the Next.js app
 - `.github/workflows/ci.yml` - CI checks on pull requests
+- `.github/workflows/codeql.yml`, `gitleaks.yml` - code scanning and secret scanning
+- `.github/dependabot.yml` - weekly dependency update PRs
 - `.gitattributes` - keeps line endings as LF for everyone
 - `demo-source/` - the concept demo screens (they run inside Claude's design canvas, kept here for reference)

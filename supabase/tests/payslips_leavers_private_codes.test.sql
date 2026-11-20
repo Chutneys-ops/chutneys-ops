@@ -37,7 +37,7 @@ select throws_ok(
 
 -- Leavers: the owner can ------------------------------------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 
 select lives_ok(
   $$ insert into payslips (staff_id, pay_date, period_start, period_end, file_path) values
@@ -53,13 +53,13 @@ select is(
   1, 'The owner can read the file, so they can download it and send it on');
 
 -- Tom (turned off, token not yet expired) still sees nothing.
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from payslips), 0, 'The turned-off person can''t see their payslip in the app');
 select is((select count(*)::int from storage.objects where bucket_id = 'payslips'), 0,
   'The turned-off person can''t open the file either');
 
 -- A manager can't use the leaver exemption (or upload at all).
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select throws_ok(
   $$ insert into payslips (staff_id, pay_date, period_start, period_end, file_path) values
        ('e0000000-0000-0000-0000-00000000000e', '2026-11-27', '2026-11-16', '2026-11-22',
@@ -76,7 +76,7 @@ select ok(has_column_privilege('authenticated', 'public.staff', 'name', 'select'
   'The other staff columns are still readable');
 set local role authenticated;
 
-select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated","aal":"aal2"}', true);
 select throws_ok($$ select payroll_code from staff $$, '42501', null,
   'Staff can''t read payroll codes from the staff table');
 select throws_ok($$ select * from staff $$, '42501', null,
@@ -89,7 +89,7 @@ select is(
   'Staff see only their own payroll code');
 
 -- Payroll codes: manager -------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"c0000000-0000-0000-0000-00000000000c","role":"authenticated","aal":"aal2"}', true);
 select throws_ok($$ select payroll_code from staff $$, '42501', null,
   'Managers can''t read payroll codes from the staff table');
 select is(
@@ -97,12 +97,12 @@ select is(
   array['E102'], 'Managers see only their own payroll code, not their staff''s');
 
 -- Payroll codes: turned off ------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"e0000000-0000-0000-0000-00000000000e","role":"authenticated","aal":"aal2"}', true);
 select is((select count(*)::int from staff_payroll_codes()), 0,
   'A turned-off person can''t read even their own code');
 
 -- Payroll codes: owner -----------------------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select is(
   (select array_agg(payroll_code order by payroll_code) from staff_payroll_codes()
    where staff_id in ('a0000000-0000-0000-0000-00000000000a', 'c0000000-0000-0000-0000-00000000000c',
@@ -127,7 +127,7 @@ select throws_ok($$ select * from staff_payroll_codes() $$, '42501', null,
 -- The owner can still set codes (set_staff_payroll_code runs as the table owner).
 reset role;
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"d0000000-0000-0000-0000-00000000000d","role":"authenticated","aal":"aal2"}', true);
 select lives_ok($$ select set_staff_payroll_code('a0000000-0000-0000-0000-00000000000a', 'E111') $$,
   'The owner still changes payroll codes');
 

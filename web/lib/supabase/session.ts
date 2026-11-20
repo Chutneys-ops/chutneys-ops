@@ -15,25 +15,48 @@ export type CurrentShift = { id: string; clock_in: string; site: SiteSummary };
 
 /** Where a turned-off person is sent: it signs them out and says why. */
 export const DEACTIVATED_SIGNOUT_PATH = "/auth/signout";
+/** Where two-step sign-in happens: set up an authenticator, or type the code. */
+export const MFA_PATH = "/mfa";
 
-/** Like getSession, but never redirects. Only /auth/signout uses it. */
-export async function readSession(supabase: Supabase): Promise<{ userId: string | null; me: Me | null }> {
+/** What two-step sign-in still needs (mfa_status() in the database):
+ *  "enrol"  - an owner or manager with no authenticator yet;
+ *  "verify" - has one, signed in with only a password so far;
+ *  "none"   - nothing to do. */
+export type MfaStep = "none" | "enrol" | "verify";
+
+export type SessionInfo = { userId: string | null; me: Me | null; mfa: MfaStep };
+
+function mfaStep(value: unknown): MfaStep {
+  return value === "enrol" || value === "verify" ? value : "none";
+}
+
+/** Like getSession, but never redirects. /auth/signout and /mfa use it. */
+export async function readSession(supabase: Supabase): Promise<SessionInfo> {
   const { data: auth } = await supabase.auth.getClaims();
   const userId = auth?.claims?.sub ?? null;
-  if (!userId) return { userId: null, me: null };
+  if (!userId) return { userId: null, me: null, mfa: "none" };
   // You can always read your own staff row (RLS "see self or owner"), even
-  // when your account is turned off (the "active accounts only" exception).
-  const { data } = await supabase.from("staff").select("id, name, role, active").eq("id", userId).maybeSingle();
-  return { userId, me: (data as Me | null) ?? null };
+  // when your account is turned off (the "active accounts only" exception)
+  // or you still need to type your two-step code.
+  const [{ data }, { data: mfa }] = await Promise.all([
+    supabase.from("staff").select("id, name, role, active").eq("id", userId).maybeSingle(),
+    supabase.rpc("mfa_status"),
+  ]);
+  return { userId, me: (data as Me | null) ?? null, mfa: mfaStep(mfa) };
 }
 
 /** userId is null when signed out. me is null when the login has no staff row.
- *  A turned-off person (staff.active = false) whose token hasn't expired yet
- *  is sent to sign out. Every signed-in page calls this, so it happens on
- *  their next page load. (The database already shows them nothing.) */
-export async function getSession(supabase: Supabase): Promise<{ userId: string | null; me: Me | null }> {
+ *  - A turned-off person (staff.active = false) whose token hasn't expired
+ *    yet is sent to sign out.
+ *  - Anyone who still needs two-step sign-in (an owner or manager without an
+ *    authenticator, or anyone with one who hasn't typed the code) is sent to
+ *    /mfa.
+ *  Every signed-in page calls this, so it happens on their next page load.
+ *  (The database already holds them to staff-level or nothing.) */
+export async function getSession(supabase: Supabase): Promise<SessionInfo> {
   const session = await readSession(supabase);
   if (session.me && !session.me.active) redirect(DEACTIVATED_SIGNOUT_PATH);
+  if (session.me && session.mfa !== "none") redirect(MFA_PATH);
   return session;
 }
 

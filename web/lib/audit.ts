@@ -72,6 +72,8 @@ const TABLES: Record<string, [string, string]> = {
   notification_prefs: ["Notification settings", "notification setting"],
   sent_notifications: ["Reminders sent", "reminder"],
   payslips: ["Payslips", "payslip"],
+  mfa_resets: ["Two-step resets", "two-step reset"],
+  rate_limits: ["Rate limits", "rate limit count"],
 };
 
 /** "purchases" -> "Purchases"; unknown tables -> the raw name. */
@@ -226,6 +228,12 @@ const COLUMNS: Record<string, string> = {
   withdrawn_at: "Withdrawn at",
   withdrawn_by: "Withdrawn by",
   withdrawn_reason: "Why withdrawn",
+  reset_by: "Reset by",
+  reset_at: "Reset at",
+  factors_removed: "Devices removed",
+  key: "Key",
+  window_started_at: "Window started",
+  hits: "Tries",
 };
 
 // Where a column means something different in one table.
@@ -240,6 +248,7 @@ const TABLE_COLUMNS: Record<string, string> = {
   "roster_shifts.created_by": "Rostered by",
   "sent_notifications.kind": "Reminder",
   "payslips.staff_id": "For",
+  "mfa_resets.staff_id": "For",
 };
 
 /** Friendly column name; the raw name if there's no label. */
@@ -272,6 +281,7 @@ const STAFF_COLUMNS = new Set([
   "published_by",
   "uploaded_by",
   "withdrawn_by",
+  "reset_by",
 ]);
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
@@ -442,6 +452,13 @@ export function describeAudit(entry: AuditEntry, lookups: AuditLookups = EMPTY_L
         return `Changed ${name}'s opening time to ${str(entry.new_data, "opens_at")?.slice(0, 5) ?? "?"}`;
       }
       break;
+    }
+    case "mfa_resets": {
+      if (action === "insert") return `Reset ${person("staff_id")}'s two-step sign-in`;
+      break;
+    }
+    case "rate_limits": {
+      return "Counted a try against a rate limit";
     }
     case "push_subscriptions": {
       if (action === "insert") return "Turned on notifications on a device";

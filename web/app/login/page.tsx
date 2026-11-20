@@ -5,6 +5,7 @@ import { LoginForm } from "./login-form";
 const NOTICES: Record<string, string> = {
   deactivated: "Your account has been turned off. Talk to your manager.",
   link: "That link has expired or was already used. Use Forgot password to get a new one.",
+  idle: "You were signed out after 15 minutes without use (this is a shared device).",
 };
 
 export default function LoginPage({ searchParams }: PageProps<"/login">) {

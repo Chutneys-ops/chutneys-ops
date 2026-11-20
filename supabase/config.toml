@@ -242,8 +242,13 @@ password_requirements = ""
 # rp_id = "localhost"
 # rp_origins = ["http://127.0.0.1:3000"]
 
+# Slice 8b: tightened. These only configure the LOCAL stack; set the same
+# numbers in the hosted dashboard (Authentication > Rate Limits), see
+# docs/RUNBOOK.md > Hosted settings. Limits are per IP address unless they
+# say otherwise. A whole restaurant shares one IP (its wifi), so sign-in
+# allows a busy shift change, not just one person.
 [auth.rate_limit]
-# Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
+# Number of emails that can be sent per hour (invites, password resets). Requires auth.email.smtp to be enabled.
 email_sent = 2
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
@@ -252,9 +257,11 @@ anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
 token_refresh = 150
 # Number of sign up and sign-in requests that can be made in a 5 minute interval per IP address (excludes anonymous users).
-sign_in_sign_ups = 30
+# Was 30.
+sign_in_sign_ups = 20
 # Number of OTP / Magic link verifications that can be made in a 5 minute interval per IP address.
-token_verifications = 30
+# Invite and reset links. Was 30.
+token_verifications = 15
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
 web3 = 30
 
@@ -280,7 +287,8 @@ secure_password_change = false
 # On: Settings > Change password must send the current password.
 require_current_password = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+# One reset email per address per minute (was 1s), so Forgot password can't be used to flood someone's inbox.
+max_frequency = "60s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
@@ -353,15 +361,19 @@ message_service_sid = ""
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
 auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
-# Multi-factor-authentication is available to Supabase Pro plan.
+# Two-step sign-in (slice 8b). Authenticator app codes (TOTP) are free on
+# every Supabase plan; only phone (SMS) MFA costs extra, and we don't use it.
+# Owners and managers must set one up; staff can choose to. The database
+# checks the result (aal2) in is_owner() and is_manager().
 [auth.mfa]
 # Control how many MFA factors can be enrolled at once per user.
-max_enrolled_factors = 10
+# A phone plus a second device is the recommendation; 5 leaves room.
+max_enrolled_factors = 5
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

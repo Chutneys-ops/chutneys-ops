@@ -30,6 +30,7 @@ import {
 } from "@/lib/reminders";
 import { STALE_HOURS } from "@/lib/hours";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { limitIp } from "@/lib/supabase/rate-limit";
 
 /** For local testing only: {"now": "2026-11-20T10:05:00+13:00"} pretends
  *  it's that time. Ignored in production. */
@@ -88,6 +89,11 @@ async function gather(admin: Admin, now: Date): Promise<ReminderData> {
 }
 
 export async function POST(request: NextRequest) {
+  // Per IP, before the secret check, so guessing the secret is slow too.
+  const limit = await limitIp(request, "cron");
+  if (!limit.allowed) {
+    return NextResponse.json({ error: limit.message }, { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } });
+  }
   if (!cronAuthorised(request)) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }

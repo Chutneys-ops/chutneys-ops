@@ -8,6 +8,7 @@ import {
   changeRole,
   inviteStaff,
   resendInvite,
+  resetTwoStep,
   setActive,
   setPayrollCode,
   type InviteState,
@@ -212,5 +213,47 @@ export function PayrollCodeForm({ person }: { person: { id: string; payrollCode:
       </div>
       <FormMessage ok={state.ok} message={state.message} />
     </form>
+  );
+}
+
+// ---- Two-step sign-in ---------------------------------------------------------------------
+
+/** Lost phone: remove their authenticator(s). Needs a second tap. */
+export function ResetTwoStepForm({ person }: { person: { id: string; name: string } }) {
+  const [state, action, pending] = useActionState(resetTwoStep, initial);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold text-ink">Two-step sign-in</p>
+      {confirming ? (
+        <form
+          action={(formData) => {
+            setConfirming(false);
+            action(formData);
+          }}
+          className="space-y-3 rounded-xl border border-warning/30 bg-warning-light p-3"
+        >
+          <input type="hidden" name="staffId" value={person.id} />
+          <p className="text-sm text-ink">
+            <span className="font-semibold">Reset {person.name}&apos;s two-step sign-in?</span> Do this only after
+            checking with them in person or by phone (someone could be pretending to be them). Their authenticator
+            is removed and they&apos;re signed out everywhere. Managers set up a new one at their next sign-in.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setConfirming(false)} className={secondaryButton}>
+              Cancel
+            </button>
+            <button type="submit" className={dangerButton}>
+              Yes, reset
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" disabled={pending} onClick={() => setConfirming(true)} className={secondaryButton}>
+          {pending ? "Resetting…" : "Reset two-step sign-in (lost phone)"}
+        </button>
+      )}
+      <FormMessage ok={state.ok} message={state.message} />
+    </div>
   );
 }

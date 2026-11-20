@@ -50,7 +50,7 @@ insert into cash_ups (site_id, sales_total, eftpos_total, float_amount, cash_cou
 
 -- Act as Sam (staff), not clocked in -----------------------------------------
 set local role authenticated;
-select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal2"}', true);
 
 select throws_ok(
   $$ insert into record_sheets (site_id, template_code) values ('11000000-0000-0000-0000-00000000000a', 'test_checks') $$,
@@ -179,7 +179,7 @@ select is_empty(
   'after clock_out there is no open shift');
 
 -- Act as Max (manager), not clocked in ---------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000003","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000003","role":"authenticated","aal":"aal2"}', true);
 
 select is(
   (select count(*)::int from record_sheets where site_id in (
@@ -223,7 +223,7 @@ select is(
   'the fix records who made it');
 
 -- Act as Olu (owner) ---------------------------------------------------------
-select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000004","role":"authenticated"}', true);
+select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000004","role":"authenticated","aal":"aal2"}', true);
 
 select isnt_empty($$ select 1 from cash_ups $$, 'the owner sees cash-ups');
 select isnt_empty($$ select 1 from daily_sales $$, 'the owner sees daily sales');
