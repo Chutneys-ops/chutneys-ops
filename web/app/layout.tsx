@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
+import { BRAND_GREEN } from "@/lib/brand/app-icon";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from our own
@@ -18,7 +19,23 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: "Chutneys Ops",
-  description: "Checklists, food safety and cash-ups for every Chutneys site.",
+  description: "Food safety records, hours, purchases and leave for every Chutneys site.",
+  // Installable app: manifest from app/manifest.ts, icons from
+  // app/icons/[file]/route.tsx (one artwork in lib/brand/app-icon.tsx).
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  // iPhone "Add to Home Screen": open full screen with this name.
+  appleWebApp: { capable: true, title: "Chutneys", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: BRAND_GREEN,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

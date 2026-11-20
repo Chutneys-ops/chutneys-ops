@@ -14,8 +14,22 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
   - Money (cash-ups, daily sales) is owner only; managers can't see it.
   - Old clock-in/clock-out rows (and `fix_clock_out`, `needs_review`) stay in the database for history. The app no longer shows Clock out, forgotten-shift notices or the "Needs fixing" list.
   - `staff_sites` is no longer used for access. It's kept for now as history.
-- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. `/` goes to `/start`.
-- **Choose site** (`/start`): a big card per site. Tapping one sets today's site and opens Records. The header shows "Site: …" with Change site.
+- **Login**: email and password through Supabase Auth, with `web/proxy.ts` refreshing the session on every request. Signing in always lands on Home (never a "next" or last-visited page). `/` redirects to `/home`, and refreshing a page stays on it.
+- **Home** (`/home`): where every login lands.
+  - A greeting by Auckland time of day ("Good morning, Ana") and the date.
+  - A daily message: one original line a day, the same for everyone, picked by the Auckland date from about 60 lines in `web/lib/daily-messages.ts` (`pickMessage`).
+  - Today's site, with Change site, or a big "Choose site" button. Choosing from Home comes back to Home.
+  - **Due today:** records that must be done every day (`record_templates.required_daily`: fridge temperatures, opening checks and cleaning) with no entry yet at your site, each linking to its record, or "All done for today". Records that only apply when something happens (cooking, cooling, reheating, deliveries...) never show as due. The flag is set in the twelfth migration and in `seed.sql`, and only daily templates can have it.
+  - **Your stuff:** training to confirm, your latest leave request and this week's paid hours.
+  - **Managers and the owner** also see "Needs attention" counts: people to clear after illness, out-of-range readings today, sheets not signed off today, timesheets to approve, leave waiting. Cards with a zero count are hidden.
+  - **The owner** also sees this month's purchases (total and GST).
+  - Every query runs as the signed-in person, so RLS decides what's counted. The logic is in `web/lib/home.ts`, with tests.
+- **Installable app (PWA):**
+  - `app/manifest.ts` sets the name "Chutneys Ops" (short "Chutneys"), start page `/home`, full screen, and the brand colours.
+  - Every icon (192, 512, maskable, Apple touch, favicon) is drawn at build time from one file, `web/lib/brand/app-icon.tsx`, by `app/icons/[file]/route.tsx`. **To use the real logo, change only `app-icon.tsx`.**
+  - `/install` shows the steps for iPhone (Safari > Share > Add to Home Screen) and Android (Chrome > Install app), with pictures drawn in SVG. Your phone's steps come first, and it says "Already installed" when the app is running from the home screen.
+  - Home shows a small "Install the app" card until it's installed or dismissed. The dismissal is remembered per device.
+- **Choose site** (`/start`): a big card per site. Tapping one sets today's site and opens Records, or goes back to Home if you came from there. The header shows "Site: …" with Change site.
 - **Food safety records** (`/records`, third migration): record types from templates in the database:
   - opening checks for each kind of site
   - fridge temperatures, cooking, cooling, reheating, hot holding, cold display, transport, batter fermentation and cleaning
@@ -66,10 +80,11 @@ Status: Phase 1 MVP in progress. Concept demo shown to the owner on 16 Nov 2026.
     - "Add hours for someone".
     - Adding or changing someone else's hours needs a note, and so does changing approved hours.
     - Approved hours are locked for staff and can't be deleted.
-- **Bottom navigation**: Records, Time, Purchases and More (the menu above).
+- **Bottom navigation**: Home, Records, Time, Purchases and More (the menu above).
 - **Design** (`web/app/globals.css`): the concept demo's colours as Tailwind theme tokens, Inter and Space Grotesk via `next/font`, and restyled login, picker, records, loading and error screens. Light theme only for now.
 - **Tests**: unit tests in `web/lib/*.test.ts` for:
   - NZ dates, record validation, NZ breaks (every boundary, plus agreement with the SQL) and timesheet checks
+  - Home (greeting, what's due, count cards, money) and the daily message picker
   - purchases (GST maths, CSV)
   - shared upload and CSV helpers (`uploads.ts`, `csv.ts`)
   - leave validation, the training matrix and the hours CSV
@@ -139,6 +154,10 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
   - **Hosted buckets:** `config.toml` only creates the buckets (`invoices`, `leave-documents`, `signatures`) locally. Before go-live, run `npx supabase seed buckets --remote` (or create them in the dashboard with the same settings).
   - **HEIC photos:** "Choose file" with an iPhone HEIC photo only works in Safari (other browsers can't open HEIC to shrink it). The camera button always gives a JPEG.
   - **Xero:** push purchases as bills instead of the CSV once the Xero connection exists.
+- **Home and the app:**
+  - **Real logo:** replace the placeholder in `web/lib/brand/app-icon.tsx`. The image renderer's built-in font has no bold, so a real logo image will look better than the letter.
+  - **Offline:** there's no service worker, so the installed app needs a connection. Chrome no longer requires one to install. Add one later if trucks need to work offline.
+  - **Android install button:** Chrome can offer a one-tap "Install" through the `beforeinstallprompt` event. The guide currently shows the menu steps instead.
 - **Timesheets:**
   - **Agreed break arrangements per person:** the Employment Relations Act lets an employer and employee agree different break times, or compensation instead of breaks. Everyone gets the default Employment NZ table for now. Add a per-person arrangement (for example a 45-minute unpaid meal, or a paid meal break) for `nz_breaks` or the paid-minutes trigger to use.
   - **Changing someone's approved hours:** the database allows it for managers with a note, but the page only shows "Change" on your own week and on hours waiting for approval. Add a manager view of approved weeks.
@@ -156,7 +175,7 @@ Run from the repo root unless it says `web/`. Docker Desktop must be running fir
 
 ## Design plan
 
-- **Home screen:** a proper home screen with Chutneys branding later. For now `/` goes straight to the site picker.
+- **Home screen:** built (see What's built so far). The logo is still a placeholder green "C" until the owners send the real one.
 - **Money pages are owner only:** cash-ups, daily sales and anything else with money in it. The database already enforces this (`is_owner()` on `cash_ups` and `daily_sales`), so managers can't see it even through the API.
   - Exception: **purchases**. Managers see all purchases, because they approve staff spending and pay people back. The monthly export is still owner only.
 - **Mobile first:** big tap targets (48px or more), the bottom tab bar for the main sections, and the current site always visible at the top.

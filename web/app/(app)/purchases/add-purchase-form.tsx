@@ -11,6 +11,7 @@
 //   4. If that fails, delete the uploaded file (the action does too).
 
 import { useRef, useState, type FormEvent } from "react";
+import { ChoiceOption } from "@/components/choice-option";
 import { DocumentPicker, type PickedFile } from "@/components/document-picker";
 import {
   PAYMENT_LABELS,
@@ -29,8 +30,6 @@ type Phase = "idle" | "preparing" | "uploading" | "saving";
 
 const inputClass =
   "mt-1.5 min-h-12 w-full rounded-xl border bg-white px-3 text-base text-ink focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none";
-const choiceClass =
-  "flex min-h-12 cursor-pointer items-center justify-center rounded-xl border border-line bg-white px-2 text-center text-sm font-medium has-checked:border-primary has-checked:bg-primary-light has-checked:text-primary-dark";
 export function AddPurchaseForm({ siteId, siteName }: { siteId: string; siteName: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [invoice, setInvoice] = useState<PickedFile | null>(null);
@@ -166,28 +165,12 @@ export function AddPurchaseForm({ siteId, siteName }: { siteId: string; siteName
       <fieldset>
         <legend className="text-sm font-semibold text-ink">GST included?</legend>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
-          <label className={choiceClass}>
-            <input
-              type="radio"
-              name="gst_included"
-              value="yes"
-              checked={gstIncluded}
-              onChange={() => setGstIncluded(true)}
-              className="sr-only"
-            />
+          <ChoiceOption name="gst_included" value="yes" checked={gstIncluded} onChange={() => setGstIncluded(true)}>
             Yes
-          </label>
-          <label className={choiceClass}>
-            <input
-              type="radio"
-              name="gst_included"
-              value="no"
-              checked={!gstIncluded}
-              onChange={() => setGstIncluded(false)}
-              className="sr-only"
-            />
+          </ChoiceOption>
+          <ChoiceOption name="gst_included" value="no" checked={!gstIncluded} onChange={() => setGstIncluded(false)}>
             No (supplier not GST registered)
-          </label>
+          </ChoiceOption>
         </div>
         <p className="mt-1 text-sm text-muted" aria-live="polite">
           {cents !== null ? `GST: ${formatMoney(gstCents(cents, gstIncluded))}` : "GST is worked out for you"}
@@ -198,10 +181,9 @@ export function AddPurchaseForm({ siteId, siteName }: { siteId: string; siteName
         <legend className="text-sm font-semibold text-ink">How was it paid?</legend>
         <div className="mt-1.5 grid grid-cols-3 gap-2">
           {PAYMENT_METHODS.map((method) => (
-            <label key={method} className={choiceClass}>
-              <input type="radio" name="payment_method" value={method} className="sr-only" />
+            <ChoiceOption key={method} name="payment_method" value={method}>
               {PAYMENT_LABELS[method]}
-            </label>
+            </ChoiceOption>
           ))}
         </div>
         {fieldError("payment_method")}

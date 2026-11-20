@@ -19,12 +19,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  // There is no home page yet: send everyone to the site picker. /start
-  // sends signed-out visitors to /login, and clocked-in staff on to /records.
-  // permanent: false gives a 307, so browsers don't cache it and a real
-  // home page can replace it later.
+  // "/" is Home. The proxy sends signed-out visitors on to /login.
+  // permanent: false gives a 307, so browsers don't cache it.
   async redirects() {
-    return [{ source: "/", destination: "/start", permanent: false }];
+    return [{ source: "/", destination: "/home", permanent: false }];
   },
 };
 

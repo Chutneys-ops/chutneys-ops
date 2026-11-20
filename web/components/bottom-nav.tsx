@@ -1,6 +1,6 @@
 "use client";
 
-// Bottom tab bar: Records, Time, Purchases, More.
+// Bottom tab bar: Home, Records, Time, Purchases, More.
 // A Client Component because it reads the URL (usePathname) to highlight
 // the active tab.
 
@@ -27,6 +27,17 @@ function Icon({ children }: { children: ReactNode }) {
 
 // `also`: other paths that belong to the tab, so it stays highlighted there.
 const TABS: { label: string; href: string; also?: string[]; icon: ReactNode }[] = [
+  {
+    label: "Home",
+    href: "/home",
+    also: ["/install"],
+    icon: (
+      <Icon>
+        <path d="M4 11l8-7 8 7" />
+        <path d="M6 10v9a1 1 0 0 0 1 1h4v-5h2v5h4a1 1 0 0 0 1-1v-9" />
+      </Icon>
+    ),
+  },
   {
     label: "Records",
     href: "/records",
@@ -93,7 +104,7 @@ function NavBar({ pathname }: { pathname: string }) {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-20 h-(--nav-h) border-t border-line bg-white pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="mx-auto grid h-16 max-w-md grid-cols-4">
+      <ul className="mx-auto grid h-16 max-w-md grid-cols-5">
         {TABS.map((tab) => {
           const active = [tab.href, ...(tab.also ?? [])].some(
             (href) => pathname === href || pathname.startsWith(`${href}/`),
